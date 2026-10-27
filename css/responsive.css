@@ -1,0 +1,80 @@
+/* =========================================================
+   Responsif: smartphone 360–480px, tablet 768px, desktop ≥1024px
+   Mobile first — bottom navigation di HP, sidebar di desktop.
+   ========================================================= */
+
+/* ---------- Smartphone (default) ---------- */
+.sidebar { display: none; }
+.main-area { min-height: 100vh; padding-bottom: calc(var(--bottom-nav-height) + 84px + env(safe-area-inset-bottom)); }
+
+@media (max-width: 575.98px) {
+  .view { padding: 0 12px 20px; }
+  .status-banner { margin: 0 12px 10px; }
+  .hero-card { padding: 18px; border-radius: 20px; }
+  .hero-balance { text-align: left; width: 100%; }
+  .hero-amount { font-size: 1.6rem; }
+  .app-card > .card-body { padding: 14px; }
+  .stat-card .card-body { padding: 12px; }
+  .stat-value { font-size: 1.05rem; }
+  .stat-icon { width: 32px; height: 32px; font-size: .95rem; margin-bottom: 8px; }
+  .type-switch { grid-template-columns: repeat(3, 1fr); }
+  .toolbar { align-items: stretch; }
+  .period-filter { width: 100%; }
+  .period-filter .form-select { flex: 1; }
+  .detail-dl { grid-template-columns: 100px 1fr; }
+  .login-card { padding: 26px 18px; }
+  .modal-fullscreen-sm-down .modal-content { border-radius: 0; }
+  .modal-fullscreen-sm-down .modal-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .journal-toolbar > .btn, .journal-toolbar > .dropdown { flex: 1; }
+  .journal-toolbar > .dropdown > .btn { width: 100%; }
+  .cal-cell { border-radius: 10px; }
+}
+
+/* Tabel menjadi kartu bertumpuk di layar kecil (hindari halaman penuh tabel). */
+@media (max-width: 767.98px) {
+  .table-responsive-stack table, .table-responsive-stack tbody, .table-responsive-stack tr, .table-responsive-stack td { display: block; width: 100%; }
+  .table-responsive-stack thead { display: none; }
+  .table-responsive-stack tr { padding: 10px 14px; border-bottom: 1px dashed var(--app-border); }
+  .table-responsive-stack td { border: 0; padding: 3px 0; display: flex; justify-content: space-between; gap: 12px; text-align: right !important; }
+  .table-responsive-stack td::before { content: attr(data-label); font-weight: 600; color: var(--app-muted); text-align: left; flex-shrink: 0; }
+  .table-responsive-stack td > * { text-align: right; }
+  .journal-table td[data-label="Keterangan"] { white-space: normal; }
+  .fab { right: 14px; }
+}
+
+/* ---------- Tablet ---------- */
+@media (min-width: 768px) {
+  .view { padding: 4px 24px 28px; }
+  .topbar { padding-left: 24px; padding-right: 24px; }
+  .status-banner { margin: 0 24px 12px; }
+  .chart-doughnut { height: 250px; }
+}
+
+/* ---------- Laptop / desktop ---------- */
+@media (min-width: 992px) {
+  .sidebar { display: flex; }
+  .bottom-nav { display: none; }
+  .main-area { margin-left: var(--sidebar-width); padding-bottom: 32px; }
+  .fab { bottom: 28px; right: 28px; }
+  .view { padding: 4px 32px 32px; max-width: 1480px; }
+  .topbar { padding: 18px 32px 14px; }
+  .status-banner { margin: 0 32px 14px; }
+  .topbar-title { font-size: 1.45rem; }
+  .hero-card { padding: 26px 28px; }
+  .hero-amount { font-size: 2.2rem; }
+}
+
+@media (min-width: 1400px) {
+  .stat-value { font-size: 1.3rem; }
+}
+
+/* Mode cetak sederhana */
+@media print {
+  .sidebar, .bottom-nav, .fab, .topbar, .status-banner, .sub-tabs, .toolbar button { display: none !important; }
+  .main-area { margin: 0; padding: 0; }
+  .app-card { box-shadow: none; break-inside: avoid; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
