@@ -1,0 +1,29 @@
+# Sistem & editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+*.log
+node_modules/
+
+# Salinan konfigurasi lokal untuk uji coba (config.js boleh di-commit karena hanya berisi URL Web App)
+js/config.local.js
+
+# Jangan pernah commit file rahasia atau dokumen pribadi
+.env
+*.pem
+*.key
+credentials*.json
+service-account*.json
+client_secret*.json
+dokumen-pribadi/
+*.pdf
+*.jpg
+*.jpeg
+!assets/images/*.jpg
+
+# Hasil export/backup
+backup-*.xlsx
+transaksi-*.csv
+laporan-*.pdf
+jurnal-*.xlsx
