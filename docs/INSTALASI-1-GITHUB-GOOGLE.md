@@ -31,7 +31,7 @@ Panduan untuk pengguna non-programmer. Perkiraan waktu: 30–45 menit.
 3. Buat file sesuai folder `google-apps-script/` (buka file `.gs` dengan Notepad/VS Code, pilih semua, salin, tempel):
    - File `Code.gs` sudah ada → hapus seluruh isinya → tempel isi `google-apps-script/Code.gs`.
    - Klik **+** di samping *Files* → **Script** → ketik `Database` (tanpa `.gs`) → tempel isi `Database.gs`.
-   - Ulangi untuk **`Transactions`**, **`Finance`**, **`Shopping`**, **`Agenda`**, **`Documents`**. Total 7 file.
+   - Ulangi untuk **`Transactions`**, **`Finance`**, **`Shopping`**, **`Agenda`**, **`Documents`**, **`Receipt`**. Total 8 file.
 4. Klik ⚙️ **Project Settings** (ikon roda gigi di kiri) →
    - **Time zone**: `(GMT+07:00) Jakarta`.
    - Centang **Show "appsscript.json" manifest file in editor** → kembali ke Editor → buka `appsscript.json` → ganti isinya dengan

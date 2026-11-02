@@ -1,6 +1,6 @@
 {
   "app": "Homie",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "files": [
     "Code.gs",
     "Database.gs",
@@ -8,6 +8,7 @@
     "Transactions.gs",
     "Shopping.gs",
     "Agenda.gs",
-    "Documents.gs"
+    "Documents.gs",
+    "Receipt.gs"
   ]
 }

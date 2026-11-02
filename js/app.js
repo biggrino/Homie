@@ -11,6 +11,7 @@ import { renderAgenda, openAgendaForm } from './agenda.js';
 import { renderDocuments } from './documents.js';
 import { renderSettings } from './settings.js';
 import { openNewCredit } from './contracts.js';
+import { imageFromTransfer } from './receipt.js';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'bi-house-door', iconActive: 'bi-house-door-fill', mobile: true },
@@ -222,6 +223,7 @@ function onRouteChange() {
 function openQuickAdd() {
   const actions = [
     { id: 'trx', icon: 'bi-receipt', tone: 'primary', label: 'Tambah transaksi', text: 'Pemasukan, pengeluaran, transfer' },
+    { id: 'scan', icon: 'bi-magic', tone: 'primary', label: 'Dari foto struk / bukti transfer', text: 'Unggah atau tempel gambar, form terisi otomatis' },
     { id: 'credit', icon: 'bi-calendar2-range', tone: 'secondary', label: 'Catat cicilan / kredit', text: 'Cicilan kartu kredit atau kredit kontrak' },
     { id: 'pay', icon: 'bi-credit-card-2-back', tone: 'warning', label: 'Bayar kartu kredit', text: 'Kurangi tagihan kartu' },
     { id: 'shop', icon: 'bi-cart-plus', tone: 'success', label: 'Tambah belanja', text: 'Daftar belanja bulan ini' },
@@ -241,6 +243,7 @@ function openQuickAdd() {
     const action = btn.dataset.quick;
     setTimeout(() => {
       if (action === 'trx') openTransactionForm();
+      if (action === 'scan') openTransactionForm(null, { pickImage: true });
       if (action === 'credit') openNewCredit();
       if (action === 'pay') openTransactionForm(null, { type: 'Pembayaran Kartu Kredit' });
       if (action === 'shop') openShoppingForm();
@@ -308,6 +311,14 @@ async function boot() {
   window.addEventListener('app:theme', (e) => { applyTheme(e.detail); refreshView(); });
   window.addEventListener('app:logout', logout);
   window.addEventListener('app:user', renderNav);
+  // Tempel (Ctrl+V) gambar struk / screenshot transfer di mana saja → form transaksi terbuka dan terisi otomatis.
+  document.addEventListener('paste', (e) => {
+    if ($('#app').hidden || document.querySelector('.modal.show, .modal.showing') || !canWrite()) return;
+    const file = imageFromTransfer(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    openTransactionForm(null, { image: file });
+  });
   window.addEventListener('auth:expired', (e) => showLogin(e.detail));
   const updateOnline = () => { $('#offline-banner').hidden = navigator.onLine; };
   window.addEventListener('online', () => { updateOnline(); toast('Koneksi internet kembali.', 'info'); });

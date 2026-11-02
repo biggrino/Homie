@@ -16,6 +16,7 @@ Editor Apps Script tidak mengenal folder, jadi buat file berikut (nama tanpa `.g
 | `Shopping` | `Shopping.gs` | `getShopping`, `addShopping`, `updateShopping`, `deleteShopping`, `copyShopping`, `checkoutShopping` (belanja → 1 transaksi Pengeluaran) |
 | `Agenda` | `Agenda.gs` | `getAgenda`, `addAgenda`, `updateAgenda`, `deleteAgenda` |
 | `Documents` | `Documents.gs` | `getDocuments`, `addDocument`, `updateDocument`, `deleteDocument` |
+| `Receipt` | `Receipt.gs` | `scanReceipt` (baca gambar struk dengan Google Gemini), `saveAiSettings` (Admin: API key di Script Properties) |
 | `appsscript.json` | `appsscript.json` | Manifest: zona waktu `Asia/Jakarta`, runtime V8 (tampilkan lewat Project Settings) |
 
 Urutan file tidak berpengaruh — semua file `.gs` berbagi satu ruang global.
@@ -28,6 +29,7 @@ Urutan file tidak berpengaruh — semua file `.gs` berbagi satu ruang global.
 | `gantiPinManual` | Reset PIN bila Admin lupa: ubah `namaPengguna` & `pinBaru` di dalam fungsi, lalu Run. |
 | `deleteSampleData` | Menghapus data contoh (sama dengan tombol di menu Pengaturan). |
 | `aktifkanBackupDrive` | Dijalankan sekali setelah update ke versi 3 agar Google meminta izin Drive untuk tombol *Backup ke Google Drive*. Tidak mengubah data. |
+| `aktifkanBacaStruk` | Instalasi manual saja: dijalankan sekali agar Google meminta izin menghubungi layanan luar (Gemini) untuk fitur baca struk. |
 
 Fungsi berakhiran `_` (misalnya `handleRequest_`) adalah fungsi internal.
 

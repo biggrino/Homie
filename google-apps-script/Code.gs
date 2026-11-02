@@ -6,7 +6,7 @@
 
 const APP_NAME = 'Homie';
 // Versi kode server. Harus sama dengan "version" di google-apps-script/versi.json dan APP_VERSION di js/settings.js.
-const SERVER_VERSION = '3.2.0';
+const SERVER_VERSION = '3.3.0';
 const APP_TIMEZONE = 'Asia/Jakarta';
 
 // Kosongkan jika script ini dibuat dari menu Extensions → Apps Script pada spreadsheet database
@@ -47,6 +47,9 @@ const ROUTES = {
   getDocuments: { fn: getDocuments },
   getSettings: { fn: getSettings },
   exportAll: { fn: exportAll },
+  // Baca gambar struk tidak mengubah data; role penulis dicek di dalam fungsi (tanpa kunci agar tidak menahan request lain).
+  scanReceipt: { fn: scanReceipt },
+  saveAiSettings: { admin: true, fn: saveAiSettings },
 
   addTransaction: { write: true, fn: addTransaction },
   updateTransaction: { write: true, fn: updateTransaction },
@@ -383,6 +386,7 @@ function publicSettings_() {
   out.SAMPLE_COUNT = parseJsonSafe_(all.SAMPLE_IDS, []).length;
   out.SERVER_VERSION = SERVER_VERSION;
   out.SERVER_AUTO_UPDATE = serverAutoUpdate_();
+  Object.assign(out, aiStatus_());
   return out;
 }
 

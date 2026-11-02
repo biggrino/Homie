@@ -324,6 +324,18 @@ body.is-loading #top-progress { opacity: 1; animation: progress-run 1.2s ease-in
 .quick-amounts { display: flex; gap: 8px; }
 select:disabled, .form-select:disabled { opacity: .65; }
 
+/* ---------- Isi transaksi dari gambar struk ---------- */
+.scan-box { background: var(--app-surface-2); border: 1.5px dashed rgba(var(--app-primary-rgb), .45); border-radius: 14px; padding: 12px; transition: background .15s, border-color .15s; outline: none; }
+.scan-box:focus-visible, .scan-box.is-drag { background: var(--app-primary-soft); border-color: var(--app-primary); }
+.scan-box.is-busy { border-style: solid; }
+.scan-empty, .scan-result { display: flex; align-items: center; gap: 12px; }
+.scan-empty[hidden], .scan-result[hidden] { display: none; }
+.scan-result { align-items: flex-start; }
+.scan-thumb { width: 64px; height: 84px; object-fit: cover; border-radius: 10px; border: 1px solid var(--app-border); background: var(--app-surface); flex-shrink: 0; }
+.scan-text { white-space: pre-wrap; max-height: 160px; overflow: auto; font-size: .75rem; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 8px; padding: 6px 8px; }
+.is-autofilled { animation: autofill-flash 1.6s ease-out; }
+@keyframes autofill-flash { 0% { box-shadow: 0 0 0 .25rem rgba(var(--app-primary-rgb), .35); } 100% { box-shadow: 0 0 0 0 rgba(var(--app-primary-rgb), 0); } }
+
 /* ---------- Jurnal ---------- */
 .journal-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
 .journal-toolbar .search-box { flex: 1 1 240px; }

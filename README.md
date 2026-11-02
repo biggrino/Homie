@@ -108,6 +108,7 @@ homie/
 │   ├── documents.js            Dokumen keluarga & pengingat masa berlaku
 │   ├── reports.js              Laporan bulanan/tahunan, export Excel & PDF
 │   ├── settings.js             Pengaturan, pengguna, backup
+│   ├── receipt.js              Baca gambar struk/bukti transfer → isian transaksi (AI Gemini / OCR)
 │   ├── ui.js                   Toast, modal, skeleton, grafik
 │   ├── utils.js                Format rupiah/tanggal & fungsi perhitungan
 │   └── demo-backend.js         Runtime Mode Demo (Google Sheets tiruan)
@@ -122,6 +123,7 @@ homie/
     ├── Shopping.gs             Belanja
     ├── Agenda.gs               Agenda & tugas
     ├── Documents.gs            Dokumen keluarga
+    ├── Receipt.gs              Baca struk dengan Google Gemini (API key di Script Properties)
     ├── appsscript.json         Manifest Apps Script (zona waktu Asia/Jakarta, V8)
     └── README.md               Petunjuk file yang dibuat di editor Apps Script
 ```
@@ -134,6 +136,7 @@ homie/
 | **Keuangan → Ringkasan** | Total aset kas, saldo rekening, saldo tunai, tagihan kartu (+ limit terpakai), cicilan belum ditagih, pemasukan, pengeluaran, cash flow; filter bulan & tahun. |
 | **Keuangan → Rekening** | Mandiri, BRI, BCA, BLU, Cash Bapak, Cash Ibu (bisa ditambah). Saldo awal, total pemasukan/pengeluaran, transfer masuk/keluar, status aktif. Saldo dihitung otomatis. |
 | **Tambah transaksi** | Pemasukan, Pengeluaran, Transfer, Pembayaran kartu kredit. ID unik `TRX-20260928-0001`. Field tujuan otomatis nonaktif kecuali transfer/bayar kartu. **Pengeluaran dengan sumber kartu kredit membuka opsi *Bayar penuh / Cicilan*** dengan kalkulator cicilan otomatis (sumber rekening/tunai menampilkan petunjuk untuk memilih kartu). Pengeluaran dari rekening/tunai bisa dipilih sebagai **pembayaran kredit kontrak**: nominal, kategori, dan keterangan terisi otomatis dan cicilan ke- kontrak naik. Lampiran berupa link Google Drive. |
+| **Transaksi dari gambar** | Di form **Tambah transaksi** (atau tombol + → *Dari foto struk / bukti transfer*): pilih gambar, foto dengan kamera HP, **tempel (Ctrl+V)**, atau seret gambar struk/nota/screenshot bukti transfer. Jenis, tanggal, nominal, keterangan, kategori, metode bayar, dan rekening terisi otomatis untuk diperiksa sebelum disimpan. Menempel gambar di halaman mana saja juga langsung membuka form. Memakai **AI Google Gemini** bila Admin sudah menyimpan API key (akurat, termasuk daftar barang), atau **OCR di perangkat** (Tesseract.js, tanpa setup, hanya menebak total/tanggal/metode). |
 | **Keuangan → Jurnal** | Tabel (desktop) / daftar kartu (HP): tanggal, ID, jenis, rekening, kategori, keterangan, masuk, keluar. Filter tanggal/bulan/tahun/rekening/kategori/jenis, pencarian, urutkan, pagination, **Export Excel & PDF**, lihat detail, edit, hapus. |
 | **Kartu Kredit** | Per kartu: **nomor kartu** (hanya 4 digit terakhir, tampil `•••• •••• •••• 4321`), limit, limit terpakai, available limit, tanggal cetak, jatuh tempo, minimum payment, dan tabel **Pembelian, Tenor, Cicilan ke-, Nominal, Selesai pada, Tagihan bulan ini** (cicilan aktif + belanja bayar penuh bulan ini) dengan total tagihan bulan ini. Ketuk baris untuk detail transaksi. Rincian tagihan (belanja + cicilan ditagihkan − pembayaran), tombol **Bayar tagihan** (penuh/minimum, tidak dihitung pengeluaran dua kali), dan riwayat pembayaran kartu. |
 | **Cicilan & Kredit** | **Satu daftar untuk semua cicilan keluarga**: cicilan kartu kredit dan kredit kontrak (leasing, KPR, kredit elektronik, paylater) dengan kolom Kartu/Nomor Kontrak, Pembelian, Tenor, Cicilan ke-, Nominal, Selesai pada; ringkasan cicilan per bulan & sisa; filter status dan jenis. Tombol **Catat cicilan** menanyakan satu hal (lewat kartu kredit atau kredit kontrak) lalu membuka form yang sesuai. Kontrak: rekam/ubah/hapus, tombol **Bayar**, riwayat pembayaran, "sudah dibayar" diperkirakan otomatis dari jatuh tempo pertama. Cicilan kartu: jadwal tagihan tiap **tanggal 16**, ubah lewat transaksinya. |
@@ -275,6 +278,10 @@ const CONFIG = {
 - Tanpa `config.js` atau dengan `API_URL` kosong → **Mode Demo**.
 - `API_URL` bukan password. File `config.js` **boleh** di-commit supaya GitHub Pages bisa membacanya; keamanan data dijaga oleh PIN di backend.
   Jangan pernah menaruh password, token, API key, atau kredensial lain di file ini.
+- **Baca struk dengan AI (opsional)**: buat API key gratis di [Google AI Studio](https://aistudio.google.com/apikey), lalu Admin menempelnya di
+  **Pengaturan → Baca Struk dengan AI → Simpan & coba**. Key disimpan di *Script Properties* Apps Script (bukan di `config.js`, bukan di spreadsheet).
+  Tanpa key, fitur tetap jalan memakai OCR di perangkat yang kurang akurat. Instalasi manual tanpa Homie Loader: jalankan fungsi
+  `aktifkanBacaStruk` sekali di editor Apps Script (izin *Connect to an external service*), lalu deploy versi baru.
 - Pengaturan lain (izin transfer antar bank, transfer dari kas tunai, kategori budget belanja) diatur Admin dari menu **Pengaturan** dan disimpan di sheet **Settings**.
 
 ## Cara kerja perhitungan
@@ -330,6 +337,10 @@ Harap dibaca — aplikasi ini untuk keluarga, **bukan** sistem keamanan tingkat 
   aktifkan 2FA dan jangan beri akses tulis repository ke orang lain.
 - **Backup ke Google Drive** membuat salinan lengkap spreadsheet (termasuk hash PIN) ke folder yang linknya diisi Admin. Gunakan folder pribadi yang tidak dibagikan.
   Fitur ini butuh izin Google Drive pada Apps Script (lihat *Cara update aplikasi*).
+- **Baca struk dengan AI**: gambar dikirim (lewat Apps Script) ke Google Gemini hanya untuk dibaca, tidak disimpan oleh Homie. Pada API key gratis,
+  Google dapat memakai data permintaan untuk meningkatkan layanannya, jadi hindari mengunggah gambar yang memuat data sensitif yang tidak perlu
+  (misalnya nomor kartu lengkap). API key hanya bisa diisi Admin, disimpan di Script Properties, dan tidak pernah dikirim ke browser.
+  OCR di perangkat memproses gambar sepenuhnya di browser.
 - Siapa pun yang punya akses edit ke spreadsheet dapat mengubah data langsung. Bagikan spreadsheet hanya ke orang yang dipercaya.
 
 ## J. Testing checklist
@@ -439,6 +450,10 @@ Web App URL tidak berubah sehingga `config.js` tidak perlu diubah.
 
 **Update ke versi 3.1 (catatan pencatat)**: ganti isi semua file `.gs` → Save → Deploy versi baru, lalu upload ulang folder `js/`, `css/`
 dan `service-worker.js`. Kolom pencatat ditambahkan otomatis saat aplikasi dibuka (database versi 4), tidak ada fungsi yang perlu dijalankan.
+
+**Update ke versi 3.3 (transaksi dari gambar)**: dengan Homie Loader cukup perbarui file di GitHub. Cara manual: tambahkan file `Receipt.gs`,
+ganti file `.gs` lainnya, jalankan `aktifkanBacaStruk` sekali, lalu deploy versi baru dan upload ulang folder `js/`, `css/`, serta `service-worker.js`.
+Database tidak berubah. Setelah itu Admin mengisi API key Gemini di **Pengaturan** (opsional).
 
 **Struktur database**: jangan mengganti nama sheet/kolom yang sudah ada. Jika menambah kolom baru, tambahkan di **akhir** array `SCHEMA` pada `Database.gs`,
 lalu naikkan `DB_VERSION` dan tambahkan langkah di `migrateDatabase_()` — header baru ditambahkan otomatis saat request pertama setelah deploy. Nama fungsi API sebaiknya tidak diubah agar frontend lama tetap kompatibel.
