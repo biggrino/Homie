@@ -10,6 +10,7 @@ import { renderShopping, openShoppingForm } from './shopping.js';
 import { renderAgenda, openAgendaForm } from './agenda.js';
 import { renderDocuments } from './documents.js';
 import { renderSettings } from './settings.js';
+import { openNewCredit } from './contracts.js';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'bi-house-door', iconActive: 'bi-house-door-fill', mobile: true },
@@ -157,10 +158,11 @@ function renderMore(container) {
     { href: '#/lainnya/dokumen', icon: 'bi-folder2-open', tone: 'primary', title: 'Dokumen Keluarga', text: 'KK, KTP, SIM, paspor, BPJS & masa berlaku' },
     { href: '#/keuangan/laporan', icon: 'bi-bar-chart-line', tone: 'info', title: 'Laporan Keuangan', text: 'Laporan bulanan & tahunan, export Excel/PDF' },
     { href: '#/keuangan/anggaran', icon: 'bi-pie-chart', tone: 'success', title: 'Anggaran', text: 'Atur budget & kategori pengeluaran' },
-    { href: '#/keuangan/kartu', icon: 'bi-credit-card', tone: 'warning', title: 'Kartu Kredit & Cicilan', text: 'Tagihan, limit & progres cicilan' },
+    { href: '#/keuangan/kartu', icon: 'bi-credit-card', tone: 'warning', title: 'Kartu Kredit', text: 'Tagihan, pembelian & bayar kartu' },
+    { href: '#/keuangan/cicilan', icon: 'bi-calendar2-range', tone: 'secondary', title: 'Cicilan & Kredit', text: 'Cicilan kartu, leasing, KPR dalam satu daftar' },
     { href: '#/pengaturan/akun', icon: 'bi-person-circle', tone: 'info', title: 'Akun Saya', text: 'Foto profil, nama & PIN' },
     { href: '#/pengaturan', icon: 'bi-gear', tone: 'secondary', title: 'Pengaturan', text: 'Tema, rekening, pengguna & aturan' },
-    { href: '#/pengaturan/backup', icon: 'bi-cloud-arrow-down', tone: 'danger', title: 'Backup', text: 'Export CSV/Excel & tanggal backup terakhir' }
+    { href: '#/pengaturan/backup', icon: 'bi-cloud-arrow-down', tone: 'danger', title: 'Backup', text: 'Backup ke Google Drive & export CSV/Excel' }
   ];
   container.innerHTML = `<div class="row g-3">${tiles.map((t) => `
     <div class="col-12 col-md-6 col-xl-4"><a href="${t.href}" class="card app-card menu-tile h-100">
@@ -219,7 +221,8 @@ function onRouteChange() {
 
 function openQuickAdd() {
   const actions = [
-    { id: 'trx', icon: 'bi-receipt', tone: 'primary', label: 'Tambah transaksi', text: 'Pemasukan, pengeluaran, transfer, cicilan' },
+    { id: 'trx', icon: 'bi-receipt', tone: 'primary', label: 'Tambah transaksi', text: 'Pemasukan, pengeluaran, transfer' },
+    { id: 'credit', icon: 'bi-calendar2-range', tone: 'secondary', label: 'Catat cicilan / kredit', text: 'Cicilan kartu kredit atau kredit kontrak' },
     { id: 'pay', icon: 'bi-credit-card-2-back', tone: 'warning', label: 'Bayar kartu kredit', text: 'Kurangi tagihan kartu' },
     { id: 'shop', icon: 'bi-cart-plus', tone: 'success', label: 'Tambah belanja', text: 'Daftar belanja bulan ini' },
     { id: 'agenda', icon: 'bi-calendar-plus', tone: 'info', label: 'Tambah agenda / tugas', text: 'Kegiatan & to-do keluarga' }
@@ -238,6 +241,7 @@ function openQuickAdd() {
     const action = btn.dataset.quick;
     setTimeout(() => {
       if (action === 'trx') openTransactionForm();
+      if (action === 'credit') openNewCredit();
       if (action === 'pay') openTransactionForm(null, { type: 'Pembayaran Kartu Kredit' });
       if (action === 'shop') openShoppingForm();
       if (action === 'agenda') openAgendaForm();
@@ -248,6 +252,7 @@ function openQuickAdd() {
 function handleFab() {
   if (currentRoute.page === 'belanja') return openShoppingForm();
   if (currentRoute.page === 'agenda') return openAgendaForm();
+  if (currentRoute.page === 'keuangan' && ['cicilan', 'kontrak'].includes(currentRoute.sub)) return openNewCredit();
   if (currentRoute.page === 'keuangan') return openTransactionForm();
   return openQuickAdd();
 }

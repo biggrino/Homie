@@ -10,28 +10,30 @@ import {
 } from './utils.js';
 import {
   toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, progressBar, pageSkeleton, skeleton,
-  moneyToggle, bindMoneyToggles, doughnutChart, chartLegend, typeBadge, trxIcon
+  moneyToggle, bindMoneyToggles, doughnutChart, chartLegend, typeBadge, trxIcon, auditNote, formatStamp
 } from './ui.js';
-import { renderCards, renderCardPayment, renderInstallments } from './creditcard.js';
+import { renderCards } from './creditcard.js';
 import { renderReports, exportExcel, exportPdf } from './reports.js';
+import { renderCredits } from './contracts.js';
 
 const TABS = [
   { id: 'ringkasan', label: 'Ringkasan', icon: 'bi-speedometer2' },
   { id: 'rekening', label: 'Rekening', icon: 'bi-bank' },
   { id: 'jurnal', label: 'Jurnal', icon: 'bi-journal-text' },
   { id: 'kartu', label: 'Kartu Kredit', icon: 'bi-credit-card' },
-  { id: 'bayar-kartu', label: 'Bayar Kartu', icon: 'bi-credit-card-2-back' },
-  { id: 'cicilan', label: 'Cicilan', icon: 'bi-calendar2-range' },
+  { id: 'cicilan', label: 'Cicilan & Kredit', icon: 'bi-calendar2-range' },
   { id: 'anggaran', label: 'Anggaran', icon: 'bi-pie-chart' },
   { id: 'laporan', label: 'Laporan', icon: 'bi-bar-chart-line' }
 ];
+
+/** Alamat lama (sebelum menu digabung) tetap bisa dibuka dari bookmark. */
+const TAB_ALIASES = { 'bayar-kartu': 'kartu', kontrak: 'cicilan' };
 
 const TYPE_OPTIONS = [
   { value: TRX.INCOME, label: 'Pemasukan', icon: 'bi-arrow-down-left' },
   { value: TRX.EXPENSE, label: 'Pengeluaran', icon: 'bi-arrow-up-right' },
   { value: TRX.TRANSFER, label: 'Transfer', icon: 'bi-arrow-left-right' },
-  { value: TRX.CARD_PAYMENT, label: 'Bayar Kartu', icon: 'bi-credit-card-2-back' },
-  { value: TRX.INSTALLMENT, label: 'Cicilan', icon: 'bi-calendar2-range' }
+  { value: TRX.CARD_PAYMENT, label: 'Bayar Kartu', icon: 'bi-credit-card-2-back' }
 ];
 
 const PAYMENT_METHODS = ['Tunai', 'Transfer', 'Kartu Debit', 'QRIS', 'E-Wallet', 'Autodebet'];
@@ -46,7 +48,8 @@ export async function afterDataChange() {
 /* =========================== RENDER MENU KEUANGAN =========================== */
 
 export async function renderFinance(container, sub) {
-  const active = TABS.some((t) => t.id === sub) ? sub : 'ringkasan';
+  const wanted = TAB_ALIASES[sub] || sub;
+  const active = TABS.some((t) => t.id === wanted) ? wanted : 'ringkasan';
   container.innerHTML = `
     <nav class="sub-tabs mb-3" aria-label="Sub menu keuangan">${TABS.map((t) => `
       <a href="#/keuangan/${t.id}" class="sub-tab ${t.id === active ? 'active' : ''}"><i class="bi ${t.icon}"></i>${t.label}</a>`).join('')}
@@ -55,7 +58,7 @@ export async function renderFinance(container, sub) {
   const content = container.querySelector('#finance-content');
   const renderers = {
     ringkasan: renderSummary, rekening: renderAccounts, jurnal: renderJournal, kartu: renderCards,
-    'bayar-kartu': renderCardPayment, cicilan: renderInstallments, anggaran: renderBudgets, laporan: renderReports
+    cicilan: renderCredits, anggaran: renderBudgets, laporan: renderReports
   };
   await renderers[active](content);
 }
@@ -176,6 +179,7 @@ async function renderAccounts(container) {
           ${a.cardPayment ? `<dt>Bayar kartu kredit</dt><dd>−${formatRupiah(a.cardPayment)}</dd>` : ''}
         </dl>
         <a href="#/keuangan/jurnal" class="small d-inline-block mt-2" data-journal-account="${a.id}">Lihat transaksi <i class="bi bi-arrow-right"></i></a>
+        ${auditNote(a)}
       </div></div></div>`).join('')}
     </div>
     <p class="small text-muted mt-3"><i class="bi bi-calculator me-1"></i>Saldo dihitung otomatis:
@@ -244,7 +248,7 @@ export function transactionListItem(t) {
   return `<button type="button" class="trx-item" data-trx-id="${escapeHtml(t.id)}">
     <span class="icon-circle icon-sm icon-${trxTone(t.type)}"><i class="bi ${trxIcon(t.type)}"></i></span>
     <span class="trx-main"><span class="trx-title">${escapeHtml(t.description || t.subCategory || t.category)}</span>
-      <span class="trx-sub">${formatDateShort(t.date)} · ${route} · ${escapeHtml(t.category)}${t.shoppingItems ? ` · <i class="bi bi-cart-check"></i> ${t.shoppingItems.length} item` : ''}</span></span>
+      <span class="trx-sub">${formatDateShort(t.date)} · ${route} · ${escapeHtml(t.category)}${t.shoppingItems ? ` · <i class="bi bi-cart-check"></i> ${t.shoppingItems.length} item` : ''}</span>${auditNote(t, { block: false })}</span>
     <span class="trx-amount ${tone}">${sign}${formatCompactRupiah(t.amount)}${t.installment ? `<small class="d-block text-muted fw-normal">${formatCompactRupiah(t.installment.monthlyPayment)} × ${t.installment.tenor}</small>` : ''}</span>
   </button>`;
 }
@@ -274,11 +278,11 @@ export function openTransactionDetail(t) {
         ${row('Metode', escapeHtml(t.paymentMethod))}
         ${inst ? row('Cicilan', `${formatRupiah(inst.monthlyPayment)} × ${inst.tenor} bulan<br><small class="text-muted">Pokok ${formatRupiah(inst.principal)} · bunga ${inst.interestRate}%/bln · admin ${formatRupiah(inst.adminFee)}</small>
           <br><small class="text-muted">Ditagihkan ke kartu mulai ${formatDate(inst.firstBillingDate)}, lalu setiap bulan pada tanggal yang sama.</small>`) : ''}
+        ${t.contract ? row('Kredit kontrak', `${escapeHtml(t.contract.contractNo)} · ${escapeHtml(t.contract.item)}${t.contract.lender ? `<br><small class="text-muted">${escapeHtml(t.contract.lender)}</small>` : ''}`) : ''}
         ${t.shoppingItems ? row('Dari daftar belanja', `<ul class="list-unstyled mb-0 small">${t.shoppingItems.map((s) => `<li class="d-flex justify-content-between gap-2"><span>${escapeHtml(s.item)}</span><span>${formatRupiah(s.amount)}</span></li>`).join('')}</ul>`) : ''}
         ${row('Lampiran', t.attachment ? `<a href="${escapeHtml(t.attachment)}" target="_blank" rel="noopener">Buka lampiran <i class="bi bi-box-arrow-up-right"></i></a>` : '')}
-        ${row('Dicatat oleh', escapeHtml(t.createdBy))}
-        ${row('Dibuat', escapeHtml(t.createdAt))}
-        ${row('Diperbarui', t.updatedAt !== t.createdAt ? escapeHtml(t.updatedAt) : '')}
+        ${row('Dicatat oleh', t.createdBy ? `${escapeHtml(t.createdBy)}${t.createdAt ? ` <small class="text-muted">· ${formatStamp(t.createdAt)}</small>` : ''}` : '')}
+        ${row('Diubah oleh', t.updatedAt && t.updatedAt !== t.createdAt ? `${escapeHtml(t.updatedBy || '-')} <small class="text-muted">· ${formatStamp(t.updatedAt)}</small>` : '')}
       </dl>`,
     footer: canWrite()
       ? `<button class="btn btn-outline-danger me-auto" id="trx-delete"><i class="bi bi-trash me-1"></i>Hapus</button>
@@ -324,7 +328,13 @@ export async function openTransactionForm(existing = null, preset = {}) {
   const activeAccounts = master.accounts.filter((a) => a.active || a.id === t.sourceAccount || a.id === t.destinationAccount);
   const activeCards = master.cards.filter((c) => c.active || c.id === t.sourceAccount || c.id === t.destinationAccount);
   const isCard = (id) => master.cards.some((c) => c.id === id);
-  const initialType = t.type || preset.type || TRX.EXPENSE;
+  const requestedType = t.type || preset.type || TRX.EXPENSE;
+  // Cicilan kartu bukan jenis tersendiri di form: dipilih lewat Pengeluaran → sumber kartu kredit → Cicilan.
+  const initialType = requestedType === TRX.INSTALLMENT ? TRX.EXPENSE : requestedType;
+  let installmentMode = requestedType === TRX.INSTALLMENT;
+  const contracts = (master.contracts || []).filter((k) => k.status === 'Aktif' || k.id === t.contractId);
+  let contractId = t.contractId || preset.contractId || '';
+  let autoDescription = '';
   const billingDay = Number(master.settings.INSTALLMENT_BILLING_DAY) || 16;
 
   const modal = openModal({
@@ -347,13 +357,19 @@ export async function openTransactionForm(existing = null, preset = {}) {
           <select id="trx-dest" name="destinationAccount" class="form-select"></select>
           <div class="form-text" id="dst-info"></div></div>
         <div class="col-12" id="mode-wrap" hidden>
-          <label class="form-label d-block">Transaksi kartu kredit</label>
-          <div class="btn-group w-100" role="group">
+          <div id="mode-toggle"><label class="form-label d-block">Cara bayar dengan kartu kredit</label>
+          <div class="btn-group w-100" role="group" aria-label="Cara bayar dengan kartu kredit">
             <input type="radio" class="btn-check" name="cardMode" id="mode-normal" value="normal">
-            <label class="btn btn-outline-primary" for="mode-normal"><i class="bi bi-bag me-1"></i>Transaksi biasa</label>
+            <label class="btn btn-outline-primary" for="mode-normal"><i class="bi bi-bag me-1"></i>Bayar penuh</label>
             <input type="radio" class="btn-check" name="cardMode" id="mode-installment" value="installment">
             <label class="btn btn-outline-primary" for="mode-installment"><i class="bi bi-calendar2-range me-1"></i>Cicilan</label>
           </div></div>
+          <div class="form-text" id="mode-hint"></div></div>
+        <div class="col-12" id="contract-wrap" hidden>
+          <label class="form-label" for="trx-contract">Bayar cicilan kredit kontrak <span class="text-muted">(opsional)</span></label>
+          <select id="trx-contract" name="contractId" class="form-select"><option value="">— Bukan pembayaran kontrak —</option>${contracts.map((k) => `
+            <option value="${k.id}" ${k.id === contractId ? 'selected' : ''}>${escapeHtml(k.contractNo)} · ${escapeHtml(k.item)} · ${formatCompactRupiah(k.monthlyPayment)}/bln</option>`).join('')}</select>
+          <div class="form-text" id="contract-info"></div></div>
         <div class="col-6"><label class="form-label" for="trx-category">Kategori</label>
           <select id="trx-category" name="category" class="form-select"></select></div>
         <div class="col-6"><label class="form-label" for="trx-sub">Subkategori</label>
@@ -388,7 +404,9 @@ export async function openTransactionForm(existing = null, preset = {}) {
   const form = modal.el.querySelector('#trx-form');
   const el = (name) => form.elements[name];
   ['amount', 'principal', 'adminFee'].forEach((n) => attachAmountInput(el(n)));
-  const selectedType = () => form.querySelector('input[name="type"]:checked').value;
+  const radioType = () => form.querySelector('input[name="type"]:checked').value;
+  /** Jenis yang disimpan: Pengeluaran pakai kartu dengan opsi Cicilan disimpan sebagai transaksi Cicilan. */
+  const selectedType = () => (radioType() === TRX.EXPENSE && installmentMode && isCard(el('sourceAccount').value) ? TRX.INSTALLMENT : radioType());
   let source = t.sourceAccount || preset.sourceAccount || '';
   let destination = t.destinationAccount || preset.destinationAccount || '';
   let category = t.category || '';
@@ -439,6 +457,7 @@ export async function openTransactionForm(existing = null, preset = {}) {
     el('amount').value = calc.total ? calc.total.toLocaleString('id-ID') : '';
     form.querySelector('#inst-preview').innerHTML = principal
       ? `<div class="d-flex justify-content-between"><span>Cicilan per bulan</span><strong>${formatRupiah(calc.monthly)}</strong></div>
+         ${calc.last !== calc.monthly && calc.tenor > 1 ? `<div class="d-flex justify-content-between small"><span>Cicilan terakhir (pembulatan)</span><span>${formatRupiah(calc.last)}</span></div>` : ''}
          <div class="d-flex justify-content-between small"><span>Total bunga</span><span>${formatRupiah(calc.interestTotal)}</span></div>
          <div class="d-flex justify-content-between small"><span>Total tagihan (+admin)</span><span>${formatRupiah(calc.total)}</span></div>
          <div class="d-flex justify-content-between small"><span>Tagihan pertama</span><span>${firstBill ? formatDate(firstBill) : '-'}</span></div>
@@ -448,7 +467,7 @@ export async function openTransactionForm(existing = null, preset = {}) {
   }
 
   function updateInfo() {
-    const type = selectedType();
+    const type = radioType();
     const acc = activeAccounts.find((a) => a.id === source);
     const card = activeCards.find((c) => c.id === source);
     form.querySelector('#src-info').innerHTML = acc ? `Saldo saat ini: <strong>${formatRupiah(acc.balance)}</strong>`
@@ -469,7 +488,7 @@ export async function openTransactionForm(existing = null, preset = {}) {
   }
 
   function update() {
-    const type = selectedType();
+    const type = radioType();
     const src = sourceOptions(type);
     form.querySelector('#src-label').textContent = src.label;
     el('sourceAccount').innerHTML = src.html || '<option value="">Tidak ada pilihan</option>';
@@ -487,9 +506,23 @@ export async function openTransactionForm(existing = null, preset = {}) {
 
     const cardSource = isCard(source);
     const modeWrap = form.querySelector('#mode-wrap');
-    modeWrap.hidden = !((type === TRX.EXPENSE || type === TRX.INSTALLMENT) && cardSource);
-    form.querySelector('#mode-normal').checked = type !== TRX.INSTALLMENT;
-    form.querySelector('#mode-installment').checked = type === TRX.INSTALLMENT;
+    modeWrap.hidden = type !== TRX.EXPENSE || !activeCards.length;
+    form.querySelector('#mode-toggle').hidden = !cardSource;
+    form.querySelector('#mode-normal').checked = !installmentMode;
+    form.querySelector('#mode-installment').checked = installmentMode;
+    form.querySelector('#mode-hint').innerHTML = !cardSource
+      ? '<i class="bi bi-info-circle me-1"></i>Pilih kartu kredit sebagai sumber untuk membuka opsi cicilan.'
+      : installmentMode ? `Tagihan masuk ke kartu per bulan setiap tanggal ${billingDay}.`
+        : 'Seluruh nominal masuk ke tagihan kartu sekaligus.';
+
+    const showContract = type === TRX.EXPENSE && !cardSource && contracts.length > 0;
+    form.querySelector('#contract-wrap').hidden = !showContract;
+    const contract = showContract ? contracts.find((k) => k.id === contractId) : null;
+    if (contract) category = contract.category;
+    form.querySelector('#contract-info').innerHTML = contract
+      ? (existing?.contractId === contract.id ? `Terhubung ke kontrak ini · cicilan ${contract.paidMonths}/${contract.tenor}`
+        : `Dicatat sebagai cicilan ke-${contract.nextInstallmentNo} dari ${contract.tenor}${contract.nextDueDate ? ` · jatuh tempo ${formatDate(contract.nextDueDate)}` : ''}`)
+      : 'Pilih kontrak bila pengeluaran ini untuk membayar leasing, KPR, atau kredit lain. Cicilan ke- akan naik otomatis.';
 
     const fixedCategory = type === TRX.TRANSFER ? 'Transfer' : type === TRX.CARD_PAYMENT ? 'Kartu Kredit' : null;
     const catType = type === TRX.INCOME ? 'Pemasukan' : 'Pengeluaran';
@@ -519,7 +552,7 @@ export async function openTransactionForm(existing = null, preset = {}) {
       el('paymentMethod').disabled = false;
     }
 
-    const isInstallment = type === TRX.INSTALLMENT;
+    const isInstallment = selectedType() === TRX.INSTALLMENT;
     form.querySelector('#installment-wrap').hidden = !isInstallment;
     el('amount').readOnly = isInstallment;
     form.querySelector('#amount-wrap label').textContent = isInstallment ? 'Total tagihan cicilan (otomatis)' : 'Nominal';
@@ -527,18 +560,38 @@ export async function openTransactionForm(existing = null, preset = {}) {
     updateInfo();
   }
 
+  const leaveInstallment = () => {
+    if (el('amount').readOnly) el('amount').value = '';
+  };
   form.querySelectorAll('input[name="type"]').forEach((r) => r.addEventListener('change', () => {
-    if (selectedType() !== TRX.INSTALLMENT && el('amount').readOnly) el('amount').value = '';
+    if (radioType() !== TRX.EXPENSE) leaveInstallment();
     update();
   }));
   form.querySelectorAll('input[name="cardMode"]').forEach((r) => r.addEventListener('change', () => {
-    const target = r.value === 'installment' ? TRX.INSTALLMENT : TRX.EXPENSE;
-    form.querySelector(`input[name="type"][value="${target}"]`).checked = true;
-    if (target === TRX.INSTALLMENT && !el('principal').value && el('amount').value) el('principal').value = el('amount').value;
-    if (target === TRX.EXPENSE) el('amount').value = '';
+    installmentMode = r.value === 'installment';
+    if (installmentMode && !el('principal').value && el('amount').value) el('principal').value = el('amount').value;
+    if (!installmentMode) leaveInstallment();
     update();
   }));
-  el('sourceAccount').addEventListener('change', () => { source = el('sourceAccount').value; update(); });
+  el('sourceAccount').addEventListener('change', () => {
+    source = el('sourceAccount').value;
+    if (!isCard(source)) leaveInstallment();
+    update();
+  });
+  el('contractId').addEventListener('change', () => {
+    contractId = el('contractId').value;
+    const k = contracts.find((x) => x.id === contractId);
+    if (k && !existing) {
+      if (k.paymentAccount && activeAccounts.some((a) => a.id === k.paymentAccount)) source = k.paymentAccount;
+      el('amount').value = k.monthlyPayment.toLocaleString('id-ID');
+      if (!el('description').value || el('description').value === autoDescription) {
+        autoDescription = `Cicilan ke-${k.nextInstallmentNo} ${k.item} (${k.contractNo})`;
+        el('description').value = autoDescription;
+      }
+    }
+    subCategory = '';
+    update();
+  });
   el('destinationAccount').addEventListener('change', () => { destination = el('destinationAccount').value; updateInfo(); });
   el('category').addEventListener('change', () => { category = el('category').value; subCategory = ''; update(); });
   el('subCategory').addEventListener('change', () => { subCategory = el('subCategory').value; });
@@ -559,6 +612,7 @@ export async function openTransactionForm(existing = null, preset = {}) {
       amount: parseAmount(el('amount').value), description: el('description').value.trim(),
       paymentMethod: el('paymentMethod').value, attachment: el('attachment').value.trim(), requestId
     };
+    if (type === TRX.EXPENSE && !form.querySelector('#contract-wrap').hidden) payload.contractId = contractId;
     if (type === TRX.INSTALLMENT) {
       payload.installment = { principal: parseAmount(el('principal').value), tenor: Number(el('tenor').value),
         interestRate: Number(el('interestRate').value) || 0, adminFee: parseAmount(el('adminFee').value) };
@@ -724,7 +778,7 @@ async function renderJournal(container) {
             <td data-label="Jenis">${typeBadge(t.type)}</td>
             <td data-label="Rekening">${escapeHtml(t.sourceName)}${t.destinationName ? ` <i class="bi bi-arrow-right small"></i> ${escapeHtml(t.destinationName)}` : ''}</td>
             <td data-label="Kategori">${escapeHtml(t.category)}${t.subCategory ? `<div class="small text-muted">${escapeHtml(t.subCategory)}</div>` : ''}</td>
-            <td data-label="Keterangan" class="text-wrap">${escapeHtml(t.description || '-')}</td>
+            <td data-label="Keterangan" class="text-wrap">${escapeHtml(t.description || '-')}${auditNote(t)}</td>
             <td data-label="Masuk" class="text-end text-success fw-semibold">${c.masuk ? formatRupiah(c.masuk) : '-'}</td>
             <td data-label="Keluar" class="text-end ${[TRX.TRANSFER, TRX.CARD_PAYMENT].includes(t.type) ? 'text-muted' : 'text-danger'} fw-semibold">${c.keluar ? formatRupiah(c.keluar) : '-'}</td>
           </tr>`;
@@ -827,6 +881,7 @@ async function renderBudgets(container) {
             <dl class="mini-dl mb-2"><dt>Budget</dt><dd>${formatRupiah(i.budget)}</dd><dt>Realisasi</dt><dd>${formatRupiah(i.actual)}</dd>
               <dt>Sisa</dt><dd class="${i.remaining < 0 ? 'text-danger' : ''}">${formatRupiah(i.remaining)}</dd></dl>
             ${progressBar(i.percent)}
+            ${i.id ? auditNote(i) : ''}
             ${canWrite() ? '<div class="small text-muted mt-2"><i class="bi bi-pencil me-1"></i>Ketuk untuk ubah budget</div>' : ''}
           </div></div></div>`).join('')}</div>`;
 
@@ -891,7 +946,7 @@ export async function openCategoryManager(onChange) {
       <li class="list-group-item d-flex align-items-center gap-2 ${c.active ? '' : 'opacity-50'}">
         <span class="dot" style="background:${c.color}"></span>
         <div class="flex-grow-1 min-w-0"><div class="fw-semibold">${escapeHtml(c.name)} ${c.active ? '' : '<small class="text-muted">(nonaktif)</small>'}</div>
-          <small class="text-muted text-truncate d-block">${escapeHtml(c.subCategories.join(', ') || 'Tanpa subkategori')}</small></div>
+          <small class="text-muted text-truncate d-block">${escapeHtml(c.subCategories.join(', ') || 'Tanpa subkategori')}</small>${auditNote(c)}</div>
         <button class="btn btn-icon" data-edit-cat="${c.id}" aria-label="Ubah"><i class="bi bi-pencil"></i></button>
         <button class="btn btn-icon text-danger" data-del-cat="${c.id}" aria-label="Hapus"><i class="bi bi-trash"></i></button>
       </li>`).join('')}</ul>`;

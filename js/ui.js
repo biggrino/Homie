@@ -2,7 +2,32 @@
  * ui.js — komponen antarmuka yang dipakai ulang: toast, modal, dialog konfirmasi,
  * skeleton loading, empty state, progress bar, dan grafik Chart.js.
  */
-import { escapeHtml, formatRupiah, formatCompactRupiah, getPref } from './utils.js';
+import { escapeHtml, formatRupiah, formatCompactRupiah, getPref, formatDate } from './utils.js';
+
+/* ---------------------------- Catatan pencatat ---------------------------- */
+
+/** "2026-10-29 10:02:11" → "29/10/2026 10:02" */
+export function formatStamp(text) {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(String(text || ''));
+  if (!m) return '';
+  return formatDate(m[1]) + (m[2] ? ' ' + m[2] : '');
+}
+
+/**
+ * Catatan kecil siapa yang mencatat dan terakhir mengubah sebuah data,
+ * contoh "Dicatat Ibu · 29/10/2026 10:02 · Diubah Bapak · 29/10/2026 11:30".
+ * Data lama yang belum punya info pencatat tidak menampilkan apa pun.
+ */
+export function auditNote(item, { block = true } = {}) {
+  if (!item || (!item.createdBy && !item.updatedBy)) return '';
+  const parts = [];
+  if (item.createdBy) parts.push(`Dicatat ${escapeHtml(item.createdBy)}${item.createdAt ? ' · ' + formatStamp(item.createdAt) : ''}`);
+  if (item.updatedBy && item.updatedAt && item.updatedAt !== item.createdAt) {
+    parts.push(`Diubah ${escapeHtml(item.updatedBy)} · ${formatStamp(item.updatedAt)}`);
+  }
+  const tag = block ? 'div' : 'span';
+  return `<${tag} class="audit-note"><i class="bi bi-person-check"></i> ${parts.join(' · ')}</${tag}>`;
+}
 
 /* ---------------------------- Avatar & foto profil ---------------------------- */
 
@@ -267,9 +292,25 @@ export function doughnutChart(canvas, items, { valueKey = 'amount', labelKey = '
   });
 }
 
+/**
+ * Persentase bulat yang jumlahnya tepat 100% (metode sisa terbesar), supaya
+ * pembulatan per kategori tidak menghasilkan total 99% atau 101%.
+ */
+export function sharePercents(amounts, total) {
+  if (!total) return amounts.map(() => 0);
+  const raw = amounts.map((a) => (a / total) * 100);
+  const result = raw.map(Math.floor);
+  let rest = 100 - result.reduce((s, v) => s + v, 0);
+  raw.map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac)
+    .forEach(({ i }) => { if (rest > 0) { result[i] += 1; rest -= 1; } });
+  return result;
+}
+
 export function chartLegend(items, total) {
-  return `<ul class="chart-legend">${items.map((i) => `
+  const shares = sharePercents(items.map((i) => i.amount), total);
+  return `<ul class="chart-legend">${items.map((i, idx) => `
     <li><span class="dot" style="background:${i.color}"></span><span class="flex-grow-1 text-truncate">${escapeHtml(i.category)}</span>
-      <span class="text-muted small me-2">${total ? Math.round((i.amount / total) * 100) : 0}%</span>
+      <span class="text-muted small me-2">${shares[idx]}%</span>
       <strong>${formatCompactRupiah(i.amount)}</strong></li>`).join('')}</ul>`;
 }

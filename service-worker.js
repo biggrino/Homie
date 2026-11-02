@@ -3,12 +3,12 @@
  * Data dari Google Apps Script selalu diambil langsung dari server.
  * Naikkan CACHE_VERSION setiap kali merilis perubahan besar.
  */
-const CACHE_VERSION = 'homie-v2';
+const CACHE_VERSION = 'homie-v3.2.0';
 const APP_SHELL = [
   './', './index.html', './manifest.json',
   './css/style.css', './css/responsive.css',
   './js/app.js', './js/api.js', './js/utils.js', './js/ui.js', './js/dashboard.js', './js/finance.js',
-  './js/creditcard.js', './js/shopping.js', './js/agenda.js', './js/documents.js', './js/reports.js',
+  './js/creditcard.js', './js/contracts.js', './js/shopping.js', './js/agenda.js', './js/documents.js', './js/reports.js',
   './js/settings.js', './js/demo-backend.js',
   './assets/icons/icon.svg', './assets/icons/icon-192.png', './assets/icons/icon-512.png'
 ];

@@ -73,6 +73,7 @@ class FakeSheet {
 
 class FakeSpreadsheet {
   constructor() { this.sheets = new Map(); }
+  getId() { return 'demo-spreadsheet'; }
   getSheetByName(name) { return this.sheets.get(name) || null; }
   insertSheet(name) { const sheet = new FakeSheet(name); this.sheets.set(name, sheet); return sheet; }
   getSheets() { return [...this.sheets.values()]; }
@@ -140,13 +141,36 @@ function createCache() {
   };
 }
 
+/**
+ * Google Drive tiruan untuk tombol "Backup ke Google Drive" di Mode Demo: salinan tidak benar-benar dibuat,
+ * hanya dicatat di memori agar alurnya bisa dicoba.
+ */
+function createDrive() {
+  const copies = [];
+  const folder = (id) => ({ getName: () => 'Folder backup (demo)', getUrl: () => `https://drive.google.com/drive/folders/${id}` });
+  return {
+    copies,
+    getFolderById: (id) => folder(id),
+    getRootFolder: () => folder('root'),
+    getFileById: () => ({
+      makeCopy(name, target) {
+        const copy = { name, folderUrl: target.getUrl(), url: `https://docs.google.com/spreadsheets/d/demo-${copies.length + 1}/edit` };
+        copies.push(copy);
+        return { getUrl: () => copy.url, getName: () => name };
+      }
+    })
+  };
+}
+
 /** Membuat runtime Apps Script tiruan dari teks file .gs. */
-export function createGasRuntime(sources) {
+export function createGasRuntime(sources, extraGlobals = {}) {
   const spreadsheet = new FakeSpreadsheet();
   const cache = createCache();
   const lock = { tryLock: () => true, waitLock: () => {}, releaseLock: () => {}, hasLock: () => true };
+  const drive = createDrive();
   const globals = {
-    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet },
+    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, flush: () => {} },
+    DriveApp: drive,
     LockService: { getScriptLock: () => lock },
     CacheService: { getScriptCache: () => cache },
     Utilities: {
@@ -164,7 +188,8 @@ export function createGasRuntime(sources) {
       createTextOutput: (text) => ({ setMimeType() { return this; }, getContent: () => text }),
       MimeType: { JSON: 'JSON' }
     },
-    Logger: { log: () => {} }
+    Logger: { log: () => {} },
+    ...extraGlobals
   };
   const names = Object.keys(globals);
   const code = sources.join('\n;\n') + '\nreturn { handleRequest_: handleRequest_, setupDatabase: setupDatabase };';
@@ -172,6 +197,7 @@ export function createGasRuntime(sources) {
   const api = new Function(...names, code)(...names.map((n) => globals[n]));
   return {
     spreadsheet,
+    drive,
     handle(body) {
       return JSON.parse(JSON.stringify(api.handleRequest_(JSON.parse(JSON.stringify(body)))));
     }

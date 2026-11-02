@@ -1,17 +1,21 @@
 /**
  * Transactions.gs — tambah/edit/hapus transaksi beserta validasi saldo, limit kartu,
- * aturan transfer, cicilan, dan pencegahan transaksi ganda.
+ * aturan transfer, cicilan, pembayaran kredit kontrak, dan pencegahan transaksi ganda.
  */
 
-function publicTransaction_(t, names, installment, shoppingItems) {
+function publicTransaction_(t, names, installment, shoppingItems, contracts) {
   names = names || nameMap_();
   const out = {
     id: t.ID, date: t.Date, type: t.Type, sourceAccount: t.SourceAccount, sourceName: names[t.SourceAccount] || t.SourceAccount,
     destinationAccount: t.DestinationAccount, destinationName: t.DestinationAccount ? (names[t.DestinationAccount] || t.DestinationAccount) : '',
     category: t.Category, subCategory: t.SubCategory, amount: t.Amount, description: t.Description,
-    paymentMethod: t.PaymentMethod, createdBy: t.CreatedBy, createdAt: t.CreatedAt, updatedAt: t.UpdatedAt,
-    attachment: t.Attachment
+    paymentMethod: t.PaymentMethod, createdBy: t.CreatedBy, createdAt: t.CreatedAt, updatedBy: t.UpdatedBy || '', updatedAt: t.UpdatedAt,
+    attachment: t.Attachment, contractId: t.ContractID || ''
   };
+  if (t.ContractID) {
+    const contract = contracts ? contracts[t.ContractID] : findRow_('Contracts', t.ContractID);
+    if (contract) out.contract = { id: contract.ID, contractNo: contract.ContractNo, item: contract.Item, lender: contract.Lender };
+  }
   if (installment) {
     out.installment = { id: installment.ID, principal: installment.Principal, tenor: installment.Tenor,
       interestRate: installment.Interest, adminFee: installment.AdminFee, monthlyPayment: installment.MonthlyPayment,
@@ -30,6 +34,8 @@ function getTransactions(data) {
   readTable_('Shopping').forEach(function (s) {
     if (s.TransactionID) (shopping[s.TransactionID] = shopping[s.TransactionID] || []).push({ id: s.ID, item: s.Item, amount: s.ActualPrice });
   });
+  const contracts = {};
+  readTable_('Contracts').forEach(function (c) { contracts[c.ID] = c; });
   let rows = readTable_('Transactions');
 
   if (data.id) rows = rows.filter(function (t) { return t.ID === data.id; });
@@ -42,6 +48,7 @@ function getTransactions(data) {
   if (data.account) rows = rows.filter(function (t) { return t.SourceAccount === data.account || t.DestinationAccount === data.account; });
   if (data.category) rows = rows.filter(function (t) { return t.Category === data.category; });
   if (data.type) rows = rows.filter(function (t) { return t.Type === data.type; });
+  if (data.contractId) rows = rows.filter(function (t) { return t.ContractID === data.contractId; });
   if (data.search) {
     const q = String(data.search).toLowerCase();
     rows = rows.filter(function (t) {
@@ -53,7 +60,7 @@ function getTransactions(data) {
     if (a.Date !== b.Date) return a.Date < b.Date ? 1 : -1;
     return a.ID < b.ID ? 1 : -1;
   });
-  return ok_(rows.map(function (t) { return publicTransaction_(t, names, installments[t.ID], shopping[t.ID]); }));
+  return ok_(rows.map(function (t) { return publicTransaction_(t, names, installments[t.ID], shopping[t.ID], contracts); }));
 }
 
 /** Mengubah input dari frontend menjadi baris sheet + melakukan validasi format. */
@@ -95,7 +102,9 @@ function normalizeTransaction_(data) {
     row: {
       Date: date, Type: type, SourceAccount: source, DestinationAccount: destination, Category: category,
       SubCategory: subCategory, Amount: amount, Description: optionalString_(data.description, 200),
-      PaymentMethod: optionalString_(data.paymentMethod, 40), Attachment: attachment
+      PaymentMethod: optionalString_(data.paymentMethod, 40), Attachment: attachment,
+      // Pembayaran kredit kontrak hanya berlaku untuk jenis Pengeluaran; jenis lain otomatis melepas kaitan kontrak.
+      ContractID: type === TYPE_EXPENSE ? optionalString_(data.contractId, 40) : ''
     },
     installment: installment
   };
@@ -162,6 +171,17 @@ function validateTransaction_(row, excludeId, allowDuplicate) {
     }
     ensureBalance();
     row.PaymentMethod = row.PaymentMethod || 'Transfer';
+  }
+
+  if (row.ContractID) {
+    const contract = findRow_('Contracts', row.ContractID);
+    if (!contract) throw appError_('Kredit kontrak yang dibayar tidak ditemukan. Mungkin sudah dihapus.', 'NOT_FOUND');
+    const paid = (Number(contract.PaidBefore) || 0) + readTable_('Transactions').filter(function (t) {
+      return t.ContractID === row.ContractID && t.ID !== excludeId;
+    }).length;
+    if (paid >= (Number(contract.Tenor) || 1)) {
+      throw appError_('Semua ' + contract.Tenor + ' cicilan kontrak ' + contract.ContractNo + ' sudah tercatat lunas.');
+    }
   }
 
   if (!allowDuplicate) {

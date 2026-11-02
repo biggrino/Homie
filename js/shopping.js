@@ -8,7 +8,7 @@ import {
   escapeHtml, formatRupiah, formatCompactRupiah, formatDateShort, parseAmount, attachAmountInput, getPref, setPref, currentPeriod,
   monthLabel, formatNumber, todayISO, isValidISODate, daysInMonth, uid
 } from './utils.js';
-import { toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, progressBar, skeleton } from './ui.js';
+import { toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, progressBar, skeleton, auditNote } from './ui.js';
 import { periodFilter, refreshApp, openTransactionDetail } from './finance.js';
 
 const CATEGORIES = ['Bahan Pokok', 'Sayur & Buah', 'Lauk', 'Bumbu', 'Minuman', 'Kebersihan', 'Perlengkapan Mandi', 'Camilan', 'Kebutuhan Bayi', 'Lainnya'];
@@ -91,6 +91,7 @@ export async function renderShopping(container) {
               <span class="shop-meta">${formatNumber(i.quantity)} ${escapeHtml(i.unit)} · ${escapeHtml(i.category)}${i.notes ? ' · ' + escapeHtml(i.notes) : ''}</span>
               ${i.recorded ? `<span class="shop-tag tag-recorded"><i class="bi bi-check2-circle me-1"></i>Tercatat ${formatDateShort(i.purchaseDate)}</span>`
                 : i.status === 'Sudah dibeli' ? '<span class="shop-tag tag-pending"><i class="bi bi-hourglass-split me-1"></i>Belum dicatat</span>' : ''}
+              ${auditNote(i, { block: false })}
             </button>
             <span class="shop-price">${i.status === 'Sudah dibeli'
               ? `<strong>${formatCompactRupiah(i.actualPrice)}</strong><small class="d-block text-muted">est. ${formatCompactRupiah(i.estimatedPrice)}</small>`

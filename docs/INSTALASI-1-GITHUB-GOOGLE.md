@@ -43,6 +43,8 @@ Panduan untuk pengguna non-programmer. Perkiraan waktu: 30–45 menit.
 7. Jalankan setup: pilih fungsi **`setupDatabase`** di dropdown toolbar → **Run**.
    - Muncul **Authorization required** → *Review permissions* → pilih akun Anda → **Advanced** → *Go to API Homie (unsafe)* → **Allow**.
      Peringatan ini normal untuk script buatan sendiri.
+   - Daftar izin yang diminta: **Google Sheets** (membaca/mengubah database) dan **Google Drive** (hanya dipakai tombol
+     *Backup ke Google Drive* untuk membuat salinan database ke folder pilihan Admin). Klik **Allow**.
    - Tunggu *Execution completed*. Kembali ke spreadsheet: semua sheet, pengguna (PIN awal `1234`), rekening, kartu, kategori,
      dan data contoh sudah terbentuk.
 
@@ -51,7 +53,7 @@ Panduan untuk pengguna non-programmer. Perkiraan waktu: 30–45 menit.
 1. Di editor Apps Script klik **Deploy → New deployment**.
 2. Klik ⚙️ di samping *Select type* → **Web app**.
 3. Isi:
-   - Description: `Homie v2`
+   - Description: `Homie v3`
    - **Execute as: Me**
    - **Who has access: Anyone** (agar website bisa memanggil API tanpa login Google; data tetap dijaga login PIN).
 4. **Deploy** → izinkan akses bila diminta.
@@ -149,13 +151,20 @@ git push origin main
 2. **Saldo awal rekening:** Pengaturan → Rekening → ✏️ → saldo pada hari mulai memakai aplikasi.
 3. **Kartu kredit:** limit, tanggal cetak, jatuh tempo, persen minimum payment. Tanggal tagihan cicilan (default **16**) ada di
    Pengaturan → Aturan Transaksi.
-4. **Hapus data contoh:** Pengaturan → Data Contoh → *Hapus data contoh*.
-5. **Anggaran bulan ini:** Keuangan → Anggaran.
-6. Coba satu alur lengkap: tambah pengeluaran, belanja → *Catat ke Keuangan*, bayar kartu. Lalu buka spreadsheet dan pastikan barisnya muncul.
+4. **Hapus data contoh:** Pengaturan → Data Contoh → *Hapus data contoh* (termasuk 2 kredit kontrak contoh).
+   Isi nomor kartu kredit cukup **4 digit terakhir**, lalu catat kredit di luar kartu (leasing, KPR) di **Keuangan → Cicilan & Kredit → Catat cicilan → Kredit Kontrak**.
+5. **Folder backup:** buat folder pribadi di Google Drive (misalnya `Homie - Backup`, jangan dibagikan), salin link dari address bar,
+   lalu tempel di **Pengaturan → Backup → Link folder Google Drive tujuan backup → Simpan link**. Coba tombol **Backup ke Google Drive** sekali.
+6. **Anggaran bulan ini:** Keuangan → Anggaran.
+7. Coba satu alur lengkap: tambah pengeluaran, belanja → *Catat ke Keuangan*, bayar kartu. Lalu buka spreadsheet dan pastikan barisnya muncul.
    Checklist lengkap ada di README bagian **J**.
-7. Bagikan alamat website ke keluarga beserta nama & PIN masing-masing.
+8. Bagikan alamat website ke keluarga beserta nama & PIN masing-masing.
 
 ## Update aplikasi di kemudian hari
+
+> **Cara termudah (mulai versi 3.2): pasang Homie Loader sekali.** Setelah itu, update cukup dengan memperbarui file di GitHub;
+> server Apps Script ikut berganti versi sendiri dalam beberapa menit tanpa menyalin file `.gs` dan tanpa deploy ulang.
+> Langkahnya ada di README → *Cara update aplikasi → Update otomatis dengan Homie Loader*.
 
 - **Website:** unggah file yang berubah lewat *Add file → Upload files* (atau `git push`). GitHub Pages memperbarui otomatis dalam 1–2 menit.
   Jika HP masih menampilkan versi lama, tutup semua tab Homie lalu buka lagi.
@@ -164,6 +173,16 @@ git push origin main
 - **Upgrade dari versi 1 (Manajemen Rumah Tangga):** ganti semua file `.gs` dan semua file website, lalu deploy versi baru seperti di atas.
   Saat aplikasi pertama kali dibuka, database diperbarui otomatis (kolom baru di ujung kanan sheet Users, CreditCards, Installments,
   Shopping; pengaturan tanggal tagihan cicilan 16). Data lama tidak dihapus dan tidak ada fungsi yang perlu dijalankan manual.
+- **Upgrade dari versi 2 ke versi 3 (Kredit Kontrak, nomor kartu, Backup ke Google Drive):**
+  1. Ganti isi semua file `.gs` → **Save**.
+  2. Pilih fungsi **`aktifkanBackupDrive`** di dropdown → **Run** → izinkan akses Google Drive (layar izin sama seperti saat `setupDatabase`).
+     Tanpa langkah ini, tombol backup menampilkan pesan bahwa izin Drive belum diberikan.
+  3. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.**
+  4. Unggah semua file website (ada file baru `js/contracts.js`).
+  5. Buka aplikasi: database diperbarui otomatis (sheet baru **Contracts**, kolom `ContractID` di Transactions, `CardNumber` di CreditCards,
+     kategori **Kredit & Cicilan**). Lalu isi link folder backup seperti langkah C5.
+- **Upgrade ke versi 3.1 (catatan "Dicatat oleh"):** ganti semua file `.gs` → **Save** → deploy versi baru, lalu unggah ulang folder `js/`, `css/`
+  dan `service-worker.js`. Saat aplikasi dibuka, kolom `CreatedBy`/`UpdatedBy` ditambahkan otomatis di ujung kanan sheet. Data lama tetap utuh.
 
 ## Masalah umum
 
