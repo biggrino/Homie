@@ -4,7 +4,7 @@
  * sehingga aplikasi bisa dicoba tanpa setup. Data demo hilang saat halaman dimuat ulang.
  */
 
-export const GAS_FILES = ['Code.gs', 'Database.gs', 'Finance.gs', 'Transactions.gs', 'Shopping.gs', 'Agenda.gs', 'Documents.gs'];
+export const GAS_FILES = ['Code.gs', 'Database.gs', 'Finance.gs', 'Transactions.gs', 'Shopping.gs', 'Agenda.gs', 'Documents.gs', 'Receipt.gs'];
 
 class FakeRange {
   constructor(sheet, row, col, numRows = 1, numCols = 1) {
@@ -168,6 +168,13 @@ export function createGasRuntime(sources, extraGlobals = {}) {
   const cache = createCache();
   const lock = { tryLock: () => true, waitLock: () => {}, releaseLock: () => {}, hasLock: () => true };
   const drive = createDrive();
+  const props = new Map();
+  const properties = {
+    getProperty: (k) => (props.has(k) ? props.get(k) : null),
+    setProperty(k, v) { props.set(k, String(v)); return this; },
+    deleteProperty(k) { props.delete(k); return this; },
+    getProperties: () => Object.fromEntries(props)
+  };
   const globals = {
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, openById: () => spreadsheet, flush: () => {} },
     DriveApp: drive,
@@ -189,6 +196,7 @@ export function createGasRuntime(sources, extraGlobals = {}) {
       MimeType: { JSON: 'JSON' }
     },
     Logger: { log: () => {} },
+    PropertiesService: { getScriptProperties: () => properties },
     ...extraGlobals
   };
   const names = Object.keys(globals);

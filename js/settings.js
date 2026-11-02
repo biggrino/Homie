@@ -8,7 +8,7 @@ import { openCategoryManager, openAccountForm, refreshApp } from './finance.js';
 import { openCardForm } from './creditcard.js';
 import { exportExcel, downloadCurrentMonthReport } from './reports.js';
 
-const APP_VERSION = '3.2.0';
+const APP_VERSION = '3.3.0';
 
 function card(id, icon, title, body) {
   return `<div class="card app-card mb-3" id="${id}"><div class="card-body">
@@ -120,6 +120,28 @@ export async function renderSettings(container, sub) {
         <option ${c.name === settings.SHOPPING_BUDGET_CATEGORY ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}</select>
       <button class="btn btn-primary btn-sm" id="save-rules">Simpan aturan</button>`) : ''}
 
+    ${isAdmin() ? card('ai', 'bi-stars', 'Baca Struk dengan AI (Admin)', `
+      <p class="small mb-2">Form transaksi bisa diisi otomatis dari foto struk atau screenshot bukti transfer.
+        Status: ${settings.AI_ENABLED ? `<span class="badge text-bg-success">AI Gemini aktif</span> <span class="text-muted">key ${escapeHtml(settings.AI_KEY_HINT || '')}</span>`
+          : '<span class="badge text-bg-secondary">OCR di perangkat</span> <span class="text-muted">(tanpa setup, kurang akurat)</span>'}</p>
+      ${isDemo() ? '<div class="alert alert-info small py-2 mb-0">Di Mode Demo hanya OCR di perangkat yang bisa dicoba. AI aktif setelah terhubung ke Google Sheets.</div>' : `
+      <ol class="small ps-3 mb-2">
+        <li>Buka <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API keys</a>, masuk dengan akun Google, klik <strong>Create API key</strong> (gratis).</li>
+        <li>Salin key, tempel di bawah, lalu klik <strong>Simpan &amp; coba</strong>.</li>
+      </ol>
+      <label class="form-label small" for="set-ai-key">API key Gemini</label>
+      <input type="password" class="form-control form-control-sm mb-2" id="set-ai-key" autocomplete="off" spellcheck="false"
+        placeholder="${settings.AI_ENABLED ? 'Kosongkan bila tidak diganti' : 'AIza…'}">
+      <label class="form-label small" for="set-ai-model">Model</label>
+      <input class="form-control form-control-sm mb-1" id="set-ai-model" value="${escapeHtml(settings.AI_MODEL || 'gemini-flash-latest')}" spellcheck="false">
+      <div class="form-text mt-0 mb-2">Biarkan <code>gemini-flash-latest</code> kecuali Anda ingin model lain.</div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary btn-sm" id="save-ai">Simpan &amp; coba</button>
+        ${settings.AI_ENABLED ? '<button class="btn btn-outline-danger btn-sm" id="remove-ai">Hapus key</button>' : ''}
+      </div>
+      <p class="small text-muted mt-3 mb-0"><i class="bi bi-shield-lock me-1"></i>Key disimpan di Script Properties Apps Script, tidak di spreadsheet dan tidak dikirim ke browser.
+        Gambar dikirim ke Google Gemini hanya untuk dibaca dan tidak disimpan oleh Homie. Pada key gratis, Google dapat memakai data untuk meningkatkan layanannya.</p>`}`) : ''}
+
     ${isAdmin() ? card('pengguna', 'bi-people', 'Kelola Akun Pengguna (Admin)', `
       <p class="small text-muted">Admin dapat mengubah nama, foto, role, status aktif, dan me-reset PIN semua akun.</p>
       <ul class="simple-list mb-3">${(settings.users || []).map((u) => `<li>
@@ -148,7 +170,7 @@ export async function renderSettings(container, sub) {
       <button class="btn btn-sm btn-outline-secondary" id="ping"><i class="bi bi-activity me-1"></i>Tes koneksi</button>`)}
   </div></div>`;
 
-  if (['backup', 'akun', 'pengguna'].includes(sub)) setTimeout(() => container.querySelector('#' + sub)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  if (['backup', 'akun', 'pengguna', 'ai'].includes(sub)) setTimeout(() => container.querySelector('#' + sub)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 
   // ---- Akun Saya: foto & nama
   const saveProfile = async (patch, btn, message) => {
@@ -320,6 +342,29 @@ export async function renderSettings(container, sub) {
     } finally {
       setButtonLoading(btn, false);
     }
+  });
+
+  const saveAi = async (btn, payload) => {
+    setButtonLoading(btn, true);
+    try {
+      const res = await api('saveAiSettings', payload, { timeout: 45000 });
+      toast(res.message);
+      await loadMaster(true);
+      renderSettings(container, 'ai');
+    } catch (err) {
+      toastError(err);
+      setButtonLoading(btn, false);
+    }
+  };
+  container.querySelector('#save-ai')?.addEventListener('click', (e) => {
+    const apiKey = container.querySelector('#set-ai-key').value.trim();
+    if (!apiKey && !settings.AI_ENABLED) return toast('Tempel API key Gemini terlebih dahulu.', 'warning');
+    saveAi(e.currentTarget, { apiKey, model: container.querySelector('#set-ai-model').value.trim() });
+  });
+  container.querySelector('#remove-ai')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const ok = await confirmDialog({ title: 'Hapus API key Gemini?', message: 'Baca struk akan kembali memakai OCR di perangkat yang kurang akurat.', confirmText: 'Hapus key', danger: true });
+    if (ok) saveAi(btn, { removeKey: true });
   });
 
   const openUserForm = (u = null) => {

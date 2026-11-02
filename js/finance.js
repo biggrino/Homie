@@ -15,6 +15,7 @@ import {
 import { renderCards } from './creditcard.js';
 import { renderReports, exportExcel, exportPdf } from './reports.js';
 import { renderCredits } from './contracts.js';
+import { scanBoxHtml, bindScanBox } from './receipt.js';
 
 const TABS = [
   { id: 'ringkasan', label: 'Ringkasan', icon: 'bi-speedometer2' },
@@ -341,6 +342,7 @@ export async function openTransactionForm(existing = null, preset = {}) {
     title: existing ? `Edit transaksi <small class="text-muted fs-6">${escapeHtml(t.id)}</small>` : 'Tambah transaksi',
     size: 'modal-lg',
     body: `<form id="trx-form" novalidate autocomplete="off">
+      ${existing ? '' : scanBoxHtml()}
       <div class="type-switch mb-3" role="radiogroup" aria-label="Jenis transaksi">${TYPE_OPTIONS.map((o) => `
         <input type="radio" class="btn-check" name="type" id="type-${o.label.replace(/\s/g, '')}" value="${o.value}" ${o.value === initialType ? 'checked' : ''}>
         <label class="btn" for="type-${o.label.replace(/\s/g, '')}"><i class="bi ${o.icon}"></i><span>${o.label}</span></label>`).join('')}
@@ -599,6 +601,49 @@ export async function openTransactionForm(existing = null, preset = {}) {
     if (selectedType() === TRX.INSTALLMENT) updateInstallmentPreview();
   }));
   update();
+
+  /* ---- Isi otomatis dari gambar struk / bukti transfer (lihat receipt.js) ---- */
+  let scanDescription = '';
+  function applyScan(r) {
+    const type = [TRX.INCOME, TRX.EXPENSE, TRX.TRANSFER].includes(r.type) ? r.type : TRX.EXPENSE;
+    const radio = form.querySelector(`input[name="type"][value="${type}"]`);
+    if (radio) radio.checked = true;
+    leaveInstallment();
+    installmentMode = false;
+    contractId = '';
+    el('contractId').value = '';
+    if (r.sourceAccount) source = r.sourceAccount;
+    if (r.destinationAccount) destination = r.destinationAccount;
+    if (r.category) { category = r.category; subCategory = r.subCategory || ''; }
+    if (r.date && isValidISODate(r.date)) el('date').value = r.date;
+    update();
+    const filled = [];
+    if (r.amount > 0) { el('amount').value = Math.round(r.amount).toLocaleString('id-ID'); filled.push('amount'); }
+    if (r.description && (!el('description').value || el('description').value === scanDescription)) {
+      scanDescription = r.description.slice(0, 200);
+      el('description').value = scanDescription;
+      filled.push('description');
+    }
+    if (r.paymentMethod && !el('paymentMethod').disabled && [...el('paymentMethod').options].some((o) => o.value === r.paymentMethod)) {
+      el('paymentMethod').value = r.paymentMethod;
+      filled.push('paymentMethod');
+    }
+    if (r.date) filled.push('date');
+    if (r.category) filled.push('category', 'subCategory');
+    if (r.sourceAccount) filled.push('sourceAccount');
+    filled.forEach((n) => {
+      el(n).classList.remove('is-autofilled');
+      void el(n).offsetWidth;
+      el(n).classList.add('is-autofilled');
+    });
+  }
+  const scanBox = form.querySelector('#scan-box');
+  if (scanBox) {
+    const scanner = bindScanBox(scanBox, { onResult: applyScan });
+    modal.el.addEventListener('hidden.bs.modal', () => scanner.destroy());
+    if (preset.image) scanner.scan(preset.image);
+    else if (preset.pickImage) scanBox.querySelector('[data-scan-input="file"]').click();
+  }
 
   const requestId = uid();
   const saveButton = modal.el.querySelector('#trx-save');

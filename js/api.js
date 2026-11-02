@@ -78,12 +78,12 @@ function setLoading(delta) {
   document.body.classList.toggle('is-loading', state.pending > 0);
 }
 
-async function sendToServer(body) {
+async function sendToServer(body, timeout = REQUEST_TIMEOUT_MS) {
   if (!navigator.onLine) {
     throw new ApiError('Tidak ada koneksi internet. Periksa jaringan Anda lalu coba lagi.', 'OFFLINE');
   }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeout);
   let response;
   try {
     response = await fetch(state.config.API_URL, {
@@ -118,13 +118,13 @@ async function sendToDemo(body) {
 
 /**
  * Memanggil aksi API. Mengembalikan objek { success, message, data } bila berhasil,
- * atau melempar ApiError dengan pesan yang mudah dipahami.
+ * atau melempar ApiError dengan pesan yang mudah dipahami. options.timeout (ms) untuk aksi yang lama, misalnya baca struk.
  */
-export async function api(action, data = {}) {
+export async function api(action, data = {}, options = {}) {
   setLoading(1);
   try {
     const body = { action, data, token: state.session?.token };
-    const result = state.demo ? await sendToDemo(body) : await sendToServer(body);
+    const result = state.demo ? await sendToDemo(body) : await sendToServer(body, options.timeout);
     if (!result || typeof result.success !== 'boolean') {
       throw new ApiError('Respons server tidak lengkap.', 'BAD_RESPONSE');
     }
