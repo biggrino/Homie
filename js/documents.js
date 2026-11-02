@@ -4,7 +4,7 @@
  */
 import { api, canWrite } from './api.js';
 import { escapeHtml, formatDate, getPref, setPref, isValidISODate } from './utils.js';
-import { toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, skeleton } from './ui.js';
+import { toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, skeleton, auditNote } from './ui.js';
 import { refreshApp } from './finance.js';
 
 const OWNER_TYPES = {
@@ -73,6 +73,7 @@ export async function renderDocuments(container) {
           </dl>
           <div class="small text-muted mb-2">${escapeHtml(expiryText(d))}</div>
           ${d.notes ? `<div class="small mb-2">${escapeHtml(d.notes)}</div>` : ''}
+          ${auditNote(d).replace('class="audit-note"', 'class="audit-note mb-2"')}
           <div class="d-flex gap-2">
             ${d.driveUrl ? `<a class="btn btn-sm btn-outline-primary flex-grow-1" href="${escapeHtml(d.driveUrl)}" target="_blank" rel="noopener noreferrer"><i class="bi bi-google me-1"></i>Buka di Drive</a>`
               : '<span class="btn btn-sm btn-outline-secondary flex-grow-1 disabled">Belum ada link</span>'}

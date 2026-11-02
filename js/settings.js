@@ -8,7 +8,7 @@ import { openCategoryManager, openAccountForm, refreshApp } from './finance.js';
 import { openCardForm } from './creditcard.js';
 import { exportExcel, downloadCurrentMonthReport } from './reports.js';
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '3.2.0';
 
 function card(id, icon, title, body) {
   return `<div class="card app-card mb-3" id="${id}"><div class="card-body">
@@ -82,7 +82,23 @@ export async function renderSettings(container, sub) {
         <button class="btn btn-sm btn-outline-secondary" id="manage-cat"><i class="bi bi-tags me-1"></i>Kelola kategori</button></div>` : ''}`)}
   </div><div class="col-lg-6">
     ${card('backup', 'bi-cloud-arrow-down', 'Backup', `
-      <p class="small text-muted">Google Sheets tetap menjadi database utama. Anda juga bisa membuat salinan manual di Google Sheets: <em>File → Buat salinan</em>.</p>
+      <p class="small text-muted">Google Sheets tetap menjadi database utama. Tombol di bawah membuat salinan lengkap database ke folder Google Drive yang ditentukan Admin.</p>
+      <div class="drive-backup mb-3">
+        ${isAdmin() ? `<label class="form-label small fw-semibold" for="set-backup-folder">Link folder Google Drive tujuan backup</label>
+          <div class="input-group input-group-sm">
+            <input type="url" class="form-control" id="set-backup-folder" placeholder="https://drive.google.com/drive/folders/…" value="${escapeHtml(settings.BACKUP_FOLDER_URL || '')}">
+            <button class="btn btn-outline-primary" id="save-backup-folder">Simpan link</button></div>
+          <div class="form-text">Buka folder di Google Drive, lalu salin link dari address bar. Pakai folder pribadi yang tidak dibagikan ke orang lain,
+            karena salinan database berisi seluruh data rumah tangga.</div>`
+        : `<div class="small">Folder tujuan: ${settings.BACKUP_FOLDER_URL ? 'sudah diatur Admin' : '<span class="text-muted">belum diatur Admin</span>'}</div>`}
+        ${canWrite() ? `<button class="btn btn-primary w-100 mt-2" id="bk-drive" ${settings.BACKUP_FOLDER_URL ? '' : 'disabled'}>
+            <i class="bi bi-cloud-upload me-2"></i>Backup ke Google Drive</button>
+          ${settings.BACKUP_FOLDER_URL ? '' : `<div class="form-text">${isAdmin() ? 'Isi dan simpan link folder dulu untuk mengaktifkan tombol backup.' : 'Minta Admin mengisi link folder backup.'}</div>`}` : ''}
+        ${settings.BACKUP_FOLDER_URL && isAdmin() ? `<a class="small d-inline-block mt-2" href="${escapeHtml(settings.BACKUP_FOLDER_URL)}" target="_blank" rel="noopener">
+          Buka folder backup <i class="bi bi-box-arrow-up-right"></i></a>` : ''}
+        <div id="bk-drive-result" class="small mt-2"></div>
+      </div>
+      <div class="small fw-semibold mb-2">Export ke perangkat ini</div>
       <div class="d-grid gap-2">
         <button class="btn btn-outline-primary text-start" id="bk-csv"><i class="bi bi-filetype-csv me-2"></i>Export transaksi (CSV)</button>
         <button class="btn btn-outline-success text-start" id="bk-xlsx"><i class="bi bi-file-earmark-excel me-2"></i>Export semua data (Excel)</button>
@@ -122,8 +138,13 @@ export async function renderSettings(container, sub) {
       <dl class="mini-dl mb-3">
         <dt>Mode</dt><dd>${isDemo() ? '<span class="badge text-bg-warning">Demo (data di browser)</span>' : '<span class="badge text-bg-success">Google Sheets</span>'}</dd>
         <dt>API</dt><dd class="text-truncate" style="max-width:220px">${apiUrl ? escapeHtml(apiUrl.replace(/(\/s\/.{6}).+(.{6}\/exec)$/, '$1…$2')) : '-'}</dd>
-        <dt>Versi aplikasi</dt><dd>${APP_VERSION}</dd><dt>Versi database</dt><dd>${escapeHtml(settings.DB_VERSION || '-')}</dd>
+        <dt>Versi website</dt><dd>${APP_VERSION}</dd>
+        <dt>Versi server</dt><dd>${escapeHtml(settings.SERVER_VERSION || 'lama (sebelum 3.2)')}
+          ${settings.SERVER_AUTO_UPDATE ? '<span class="badge text-bg-success ms-1">update otomatis</span>' : ''}</dd>
+        <dt>Versi database</dt><dd>${escapeHtml(settings.DB_VERSION || '-')}</dd>
       </dl>
+      ${!isDemo() && settings.SERVER_VERSION !== APP_VERSION ? `<div class="alert alert-warning small py-2">Versi server berbeda dengan website.
+        ${settings.SERVER_AUTO_UPDATE ? 'Server akan mengambil versi baru dari GitHub dalam beberapa menit.' : 'Perbarui kode di Apps Script, atau pasang Homie Loader agar server ikut terbarui otomatis (lihat README → Update otomatis).'}</div>` : ''}
       <button class="btn btn-sm btn-outline-secondary" id="ping"><i class="bi bi-activity me-1"></i>Tes koneksi</button>`)}
   </div></div>`;
 
@@ -207,9 +228,9 @@ export async function renderSettings(container, sub) {
     setButtonLoading(btn, true, 'Menyiapkan…');
     try {
       const { data } = await api('getTransactions');
-      const headers = ['ID', 'Tanggal', 'Jenis', 'Sumber', 'Tujuan', 'Kategori', 'Subkategori', 'Nominal', 'Keterangan', 'Metode', 'Dibuat oleh', 'Dibuat', 'Diperbarui'];
+      const headers = ['ID', 'Tanggal', 'Jenis', 'Sumber', 'Tujuan', 'Kategori', 'Subkategori', 'Nominal', 'Keterangan', 'Metode', 'Dicatat oleh', 'Dicatat', 'Diubah oleh', 'Diubah'];
       const lines = data.map((t) => [t.id, t.date, t.type, t.sourceName, t.destinationName, t.category, t.subCategory, t.amount, t.description,
-        t.paymentMethod, t.createdBy, t.createdAt, t.updatedAt].map(csvEscape).join(','));
+        t.paymentMethod, t.createdBy, t.createdAt, t.updatedBy, t.updatedAt].map(csvEscape).join(','));
       downloadBlob(new Blob(['﻿' + [headers.join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' }), `transaksi-${todayISO()}.csv`);
       await markBackup();
       toast(`${data.length} transaksi diexport ke CSV`);
@@ -243,6 +264,41 @@ export async function renderSettings(container, sub) {
       refreshApp();
     } catch (err) {
       toastError(err);
+      setButtonLoading(btn, false);
+    }
+  });
+
+  container.querySelector('#save-backup-folder')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const value = container.querySelector('#set-backup-folder').value.trim();
+    if (value && !/^https:\/\/drive\.google\.com\//i.test(value)) return toast('Isi dengan link folder Google Drive (diawali https://drive.google.com/).', 'warning');
+    setButtonLoading(btn, true);
+    try {
+      await api('updateSettings', { BACKUP_FOLDER_URL: value });
+      toast(value ? 'Link folder backup disimpan' : 'Link folder backup dihapus');
+      await loadMaster(true);
+      renderSettings(container, 'backup');
+    } catch (err) {
+      toastError(err);
+      setButtonLoading(btn, false);
+    }
+  });
+  container.querySelector('#bk-drive')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const result = container.querySelector('#bk-drive-result');
+    setButtonLoading(btn, true, 'Membuat salinan…');
+    result.innerHTML = '';
+    try {
+      const res = await api('backupToDrive');
+      toast(res.message);
+      container.querySelector('#last-backup').textContent = 'Baru saja';
+      result.innerHTML = `<div class="alert alert-success py-2 mb-0"><i class="bi bi-check-circle me-1"></i>${escapeHtml(res.data.name)}
+        ${isDemo() ? '<div class="text-muted">Mode Demo: salinan tidak benar-benar dibuat.</div>'
+          : `<div><a href="${escapeHtml(res.data.fileUrl)}" target="_blank" rel="noopener">Buka salinan</a></div>`}</div>`;
+    } catch (err) {
+      toastError(err);
+      result.innerHTML = `<div class="alert alert-warning py-2 mb-0">${escapeHtml(err.message)}</div>`;
+    } finally {
       setButtonLoading(btn, false);
     }
   });

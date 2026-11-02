@@ -12,11 +12,11 @@ const SHOPPING_GROUPS = ['MANDATORY', 'COMPLEMENTARY'];
 const SHOPPING_STATUS = ['Belum dibeli', 'Sudah dibeli'];
 
 function publicShopping_(s) {
-  return {
+  return Object.assign({
     id: s.ID, month: s.Month, year: s.Year, group: s.Group, item: s.Item, category: s.Category, quantity: s.Quantity,
     unit: s.Unit, estimatedPrice: s.EstimatedPrice, actualPrice: s.ActualPrice, status: s.Status, notes: s.Notes,
     transactionId: s.TransactionID || '', purchaseDate: s.PurchaseDate || '', recorded: !!s.TransactionID
-  };
+  }, auditInfo_(s));
 }
 
 function getShopping(data) {

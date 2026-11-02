@@ -3,7 +3,7 @@
  */
 import { api, canWrite, getMaster } from './api.js';
 import { escapeHtml, todayISO, formatDateLong, formatDateShort, relativeDayLabel, parseISO, toISO, daysInMonth, MONTHS, getPref, setPref, currentPeriod, shiftMonth, isValidISODate } from './utils.js';
-import { toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, skeleton } from './ui.js';
+import { toast, toastError, openModal, confirmDialog, setButtonLoading, emptyState, skeleton, auditNote } from './ui.js';
 import { refreshApp } from './finance.js';
 
 const CATEGORIES = ['Keluarga', 'Sekolah', 'Pekerjaan', 'Keuangan', 'Kesehatan', 'Belanja', 'Lainnya'];
@@ -29,6 +29,7 @@ function agendaItem(a, { showDate = true } = {}) {
       <span class="agenda-meta"><i class="bi ${CATEGORY_ICON[a.category] || 'bi-dot'}"></i>${escapeHtml(a.category)}
         ${showDate ? ` · <span class="${overdue ? 'text-danger fw-semibold' : ''}">${formatDateShort(a.date)} (${relativeDayLabel(a.date)})</span>` : ''}
         ${a.time ? ` · ${escapeHtml(a.time)}` : ''}${a.owner ? ` · ${escapeHtml(a.owner)}` : ''}</span>
+      ${auditNote(a, { block: false })}
     </button>
     <span class="d-flex flex-column align-items-end gap-1">
       <span class="badge-soft badge-soft-${PRIORITY_TONE[a.priority]}">${a.priority}</span>

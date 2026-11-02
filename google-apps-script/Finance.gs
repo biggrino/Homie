@@ -1,6 +1,6 @@
 /**
- * Finance.gs — perhitungan keuangan: saldo rekening, kartu kredit, cicilan, anggaran,
- * kategori, ringkasan, dashboard, dan laporan. Semua angka dihitung dari data transaksi.
+ * Finance.gs — perhitungan keuangan: saldo rekening, kartu kredit, cicilan kartu, kredit kontrak,
+ * anggaran, kategori, ringkasan, dashboard, dan laporan. Semua angka dihitung dari data transaksi.
  */
 
 const TYPE_INCOME = 'Pemasukan';
@@ -51,10 +51,15 @@ function calculateMinimumPayment_(bill, percent) {
  * Bunga total = pokok × bunga% × tenor; cicilan/bulan = (pokok + bunga total) / tenor (dibulatkan);
  * biaya administrasi ditagihkan sekali pada bulan pertama.
  */
+/**
+ * Cicilan flat. Cicilan per bulan dibulatkan ke rupiah; selisih pembulatan masuk ke cicilan terakhir
+ * sehingga total selalu = harga + bunga + admin (contoh 10.000.000 / 3 = 3.333.333, 3.333.333, 3.333.334).
+ */
 function calculateInstallment_(principal, tenor, interestRate, adminFee) {
   const interestTotal = Math.round(principal * (interestRate / 100) * tenor);
   const monthly = Math.round((principal + interestTotal) / tenor);
-  return { interestTotal: interestTotal, monthly: monthly, total: monthly * tenor + (adminFee || 0) };
+  const last = principal + interestTotal - monthly * (tenor - 1);
+  return { interestTotal: interestTotal, monthly: monthly, last: last, total: principal + interestTotal + (adminFee || 0) };
 }
 
 function calculateBudgetRemaining_(budget, actual) {
@@ -133,11 +138,11 @@ function buildLedger_(options) {
 function accountsWithBalance_(ledger) {
   return ledger.accounts.map(function (a) {
     const l = ledger.acc[a.ID];
-    return {
+    return Object.assign({
       id: a.ID, name: a.AccountName, type: a.AccountType, active: isTrue_(a.Active),
       openingBalance: a.OpeningBalance, balance: l.balance, income: l.income, expense: l.expense,
       transferIn: l.transferIn, transferOut: l.transferOut, cardPayment: l.cardPayment
-    };
+    }, auditInfo_(a));
   });
 }
 
@@ -147,8 +152,8 @@ function cardsWithOutstanding_(ledger) {
     const l = ledger.cc[c.ID];
     const outstanding = l.outstanding;
     const nextDue = nextDayOfMonth_(c.DueDate || 1, today);
-    return {
-      id: c.ID, name: c.CardName, bank: c.Bank, active: isTrue_(c.Active), limit: c.Limit,
+    return Object.assign({
+      id: c.ID, name: c.CardName, bank: c.Bank, cardNumber: c.CardNumber || '', active: isTrue_(c.Active), limit: c.Limit,
       outstanding: outstanding, availableLimit: l.available,
       usagePercent: c.Limit > 0 ? Math.round((outstanding / c.Limit) * 1000) / 10 : 0,
       statementDate: c.StatementDate, dueDate: c.DueDate, minimumPaymentPercent: c.MinimumPayment,
@@ -157,7 +162,7 @@ function cardsWithOutstanding_(ledger) {
       nextStatementDate: nextDayOfMonth_(c.StatementDate || 1, today),
       nextDueDate: nextDue, daysToDue: daysBetween_(today, nextDue),
       charges: l.charges, installments: l.installments, installmentBilled: l.installmentBilled, payments: l.payments
-    };
+    }, auditInfo_(c));
   });
 }
 
@@ -193,6 +198,13 @@ function recalculateStoredValues_() {
       FirstBillingDate: first, EndDate: addMonthsStr_(first, (Number(i.Tenor) || 1) - 1) };
   });
   rewriteColumns_('Installments', instUpdates);
+  const payments = contractPaymentsMap_();
+  const contractUpdates = {};
+  readTable_('Contracts').forEach(function (c) {
+    const p = contractProgress_(c, payments[c.ID] || [], today);
+    contractUpdates[c.ID] = { PaidMonths: p.paidMonths, Status: p.status, EndDate: p.endDate };
+  });
+  rewriteColumns_('Contracts', contractUpdates);
 }
 
 /* =========================== REKENING =========================== */
@@ -232,7 +244,10 @@ function getCreditCards() {
   const today = todayStr_();
   const installments = readTable_('Installments').map(function (i) { return publicInstallment_(i, today); });
   const monthKey = monthKey_(today);
+  const transactions = readTable_('Transactions');
   cards.forEach(function (card) {
+    card.purchases = cardPurchases_(card.id, installments, transactions, today);
+    card.billThisMonth = card.purchases.reduce(function (s, p) { return s + p.thisMonth; }, 0);
     const active = installments.filter(function (i) { return i.cardId === card.id && i.status === 'Aktif'; });
     card.activeInstallments = active.length;
     card.installmentMonthly = active.reduce(function (s, i) { return s + i.monthlyPayment; }, 0);
@@ -250,9 +265,52 @@ function getCreditCards() {
   return ok_(cards);
 }
 
+/**
+ * Rincian pembelian kartu untuk tabel menu Kartu Kredit:
+ * - cicilan yang masih berjalan (atau tagihan terakhirnya jatuh bulan ini), nominal = cicilan per bulan;
+ * - belanja bayar penuh bulan berjalan, tenor 1 kali.
+ * "Tagihan bulan ini" = bagian yang masuk tagihan kartu pada bulan kalender berjalan.
+ */
+function cardPurchases_(cardId, installments, transactions, today) {
+  const monthKey = monthKey_(today);
+  const list = [];
+  const trxById = {};
+  transactions.forEach(function (t) { trxById[t.ID] = t; });
+  installments.forEach(function (i) {
+    if (i.cardId !== cardId) return;
+    const due = i.schedule.filter(function (s) { return monthKey_(s.date) === monthKey; })[0];
+    if (i.status !== 'Aktif' && !due) return;
+    list.push(Object.assign({
+      kind: 'installment', transactionId: i.transactionId, installmentId: i.id, description: i.description, date: i.startDate,
+      tenor: i.tenor, installmentNo: due ? due.no : i.paidMonths, billedMonths: i.paidMonths, amount: i.monthlyPayment,
+      total: i.totalAmount, endDate: i.endDate, thisMonth: due ? due.amount : 0, billingDate: due ? due.date : i.nextBillingDate,
+      billed: due ? due.billed : false, status: i.status
+    }, auditInfo_(trxById[i.transactionId])));
+  });
+  transactions.forEach(function (t) {
+    if (t.Type !== TYPE_EXPENSE || t.SourceAccount !== cardId || monthKey_(t.Date) !== monthKey) return;
+    list.push(Object.assign({
+      kind: 'full', transactionId: t.ID, installmentId: '', description: t.Description || t.SubCategory || t.Category, date: t.Date,
+      tenor: 1, installmentNo: 1, billedMonths: 1, amount: Number(t.Amount) || 0, total: Number(t.Amount) || 0, endDate: t.Date,
+      thisMonth: Number(t.Amount) || 0, billingDate: t.Date, billed: true, status: 'Lunas'
+    }, auditInfo_(t)));
+  });
+  list.sort(function (a, b) { return a.kind === b.kind ? (a.date < b.date ? 1 : -1) : (a.kind === 'installment' ? -1 : 1); });
+  return list;
+}
+
+/** Nomor kartu: hanya 4 digit terakhir yang disimpan (nomor lengkap kartu kredit tidak boleh disimpan). */
+function normalizeCardNumber_(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length !== 4) throw appError_('Isi 4 digit terakhir nomor kartu kredit saja (bukan nomor lengkap).');
+  return digits;
+}
+
 function saveCreditCard(data) {
   const name = requireString_(data.name, 'Nama kartu', 40);
   const bank = requireString_(data.bank, 'Bank penerbit', 40);
+  const cardNumber = normalizeCardNumber_(data.cardNumber);
   const limit = toAmount_(data.limit, 'Limit');
   const statementDate = toNumber_(data.statementDate, 'Tanggal cetak tagihan', 1, 31);
   const dueDate = toNumber_(data.dueDate, 'Tanggal jatuh tempo', 1, 31);
@@ -260,7 +318,7 @@ function saveCreditCard(data) {
   const active = data.active === undefined ? true : isTrue_(data.active);
   ensureUniqueAccountName_(name, data.id);
   const row = { CardName: name, Bank: bank, Limit: limit, StatementDate: Math.round(statementDate), DueDate: Math.round(dueDate),
-    MinimumPayment: minimum, Active: active };
+    MinimumPayment: minimum, Active: active, CardNumber: cardNumber };
   if (data.id) {
     updateRow_('CreditCards', data.id, row);
   } else {
@@ -313,10 +371,23 @@ function installmentBilledCount_(inst, asOf) {
   return Math.max(0, Math.min(Number(inst.Tenor) || 1, count));
 }
 
-/** Nominal cicilan yang sudah ditagihkan (biaya admin ikut tagihan pertama). */
+/**
+ * Nominal tagihan cicilan bulan ke-k (0 = pertama): cicilan per bulan, ditambah biaya admin di bulan pertama
+ * dan selisih pembulatan di bulan terakhir (TotalAmount − admin − cicilan × tenor; 0 untuk data lama).
+ */
+function installmentMonthAmount_(inst, k) {
+  const tenor = Number(inst.Tenor) || 1;
+  const monthly = Number(inst.MonthlyPayment) || 0;
+  const admin = Number(inst.AdminFee) || 0;
+  const rounding = Math.round((Number(inst.TotalAmount) || 0) - admin - monthly * tenor);
+  return monthly + (k === 0 ? admin : 0) + (k === tenor - 1 ? rounding : 0);
+}
+
+/** Nominal cicilan yang sudah ditagihkan. */
 function installmentBilledAmount_(inst, count) {
-  if (count <= 0) return 0;
-  return Math.round(count * (Number(inst.MonthlyPayment) || 0) + (Number(inst.AdminFee) || 0));
+  let total = 0;
+  for (let k = 0; k < count; k++) total += installmentMonthAmount_(inst, k);
+  return Math.round(total);
 }
 
 function installmentSchedule_(inst, today) {
@@ -324,7 +395,7 @@ function installmentSchedule_(inst, today) {
   const list = [];
   for (let k = 0; k < (Number(inst.Tenor) || 1); k++) {
     const date = addMonthsStr_(first, k);
-    list.push({ no: k + 1, date: date, amount: (Number(inst.MonthlyPayment) || 0) + (k === 0 ? (Number(inst.AdminFee) || 0) : 0),
+    list.push({ no: k + 1, date: date, amount: installmentMonthAmount_(inst, k),
       billed: date <= today });
   }
   return list;
@@ -365,7 +436,7 @@ function installmentProgress_(inst, today) {
 
 function publicInstallment_(i, today, cardNames) {
   const p = installmentProgress_(i, today || todayStr_());
-  return {
+  return Object.assign({
     id: i.ID, transactionId: i.TransactionID, cardId: i.CardID, cardName: cardNames ? (cardNames[i.CardID] || i.CardID) : i.CardID,
     description: i.Description, principal: i.Principal, interestRate: i.Interest, adminFee: i.AdminFee, tenor: i.Tenor,
     monthlyPayment: i.MonthlyPayment, totalAmount: i.TotalAmount, paidMonths: p.paidMonths,
@@ -374,7 +445,7 @@ function publicInstallment_(i, today, cardNames) {
     endDate: addMonthsStr_(installmentFirstBilling_(i), (Number(i.Tenor) || 1) - 1), status: p.status,
     progressPercent: Math.round((p.paidMonths / (Number(i.Tenor) || 1)) * 100),
     schedule: installmentSchedule_(i, today || todayStr_())
-  };
+  }, auditInfo_(i));
 }
 
 function getInstallments(data) {
@@ -386,13 +457,199 @@ function getInstallments(data) {
   return ok_(list);
 }
 
+/* =========================== KREDIT KONTRAK =========================== */
+
+/**
+ * Kredit kontrak: kredit di luar kartu kredit (leasing motor/mobil, KPR, kredit HP/elektronik, pinjaman).
+ * Setiap bulan cicilan dibayar dari rekening lewat tombol Bayar → tercatat sebagai Pengeluaran (kategori kontrak)
+ * yang terhubung ke kontrak (kolom ContractID). "Cicilan ke-" = cicilan yang sudah dibayar sebelum dicatat
+ * di aplikasi (PaidBefore) + jumlah pembayaran yang tercatat.
+ */
+function contractPaymentsMap_() {
+  const map = {};
+  readTable_('Transactions').forEach(function (t) {
+    if (t.ContractID) (map[t.ContractID] = map[t.ContractID] || []).push(t);
+  });
+  Object.keys(map).forEach(function (id) {
+    map[id].sort(function (a, b) { return a.Date === b.Date ? (a.ID < b.ID ? -1 : 1) : (a.Date < b.Date ? -1 : 1); });
+  });
+  return map;
+}
+
+function contractProgress_(c, payments, today) {
+  const tenor = Number(c.Tenor) || 1;
+  const monthly = Number(c.MonthlyPayment) || 0;
+  const paidMonths = Math.min(tenor, (Number(c.PaidBefore) || 0) + payments.length);
+  const remaining = tenor - paidMonths;
+  const endDate = parseDateStr_(c.FirstDueDate) ? addMonthsStr_(c.FirstDueDate, tenor - 1) : '';
+  const nextDueDate = remaining > 0 && endDate ? addMonthsStr_(c.FirstDueDate, paidMonths) : '';
+  return {
+    paidMonths: paidMonths, remainingMonths: remaining, status: remaining <= 0 ? 'Lunas' : 'Aktif', endDate: endDate,
+    nextDueDate: nextDueDate, nextInstallmentNo: remaining > 0 ? paidMonths + 1 : 0,
+    daysToDue: nextDueDate ? daysBetween_(today, nextDueDate) : null,
+    totalAmount: tenor * monthly, remainingAmount: remaining * monthly
+  };
+}
+
+function publicContract_(c, payments, today, names) {
+  const p = contractProgress_(c, payments, today);
+  const monthKey = monthKey_(today);
+  return Object.assign({
+    id: c.ID, contractNo: c.ContractNo, lender: c.Lender, item: c.Item, tenor: Number(c.Tenor) || 0,
+    monthlyPayment: Number(c.MonthlyPayment) || 0, firstDueDate: c.FirstDueDate, endDate: p.endDate,
+    paidBefore: Number(c.PaidBefore) || 0, paidMonths: p.paidMonths, remainingMonths: p.remainingMonths, status: p.status,
+    nextDueDate: p.nextDueDate, nextInstallmentNo: p.nextInstallmentNo, daysToDue: p.daysToDue,
+    overdue: p.daysToDue !== null && p.daysToDue < 0,
+    dueThisMonth: Boolean(p.nextDueDate) && p.nextDueDate <= dateStr_(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)),
+      daysInMonth_(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)))),
+    totalAmount: p.totalAmount, remainingAmount: p.remainingAmount,
+    paidAmount: payments.reduce(function (s, t) { return s + (Number(t.Amount) || 0); }, 0),
+    progressPercent: Math.round((p.paidMonths / (Number(c.Tenor) || 1)) * 100),
+    paymentAccount: c.PaymentAccount, paymentAccountName: c.PaymentAccount ? (names[c.PaymentAccount] || c.PaymentAccount) : '',
+    category: c.Category || CONTRACT_CATEGORY, notes: c.Notes,
+    payments: payments.map(function (t, i) {
+      return Object.assign({ transactionId: t.ID, date: t.Date, amount: Number(t.Amount) || 0, no: (Number(c.PaidBefore) || 0) + i + 1,
+        sourceName: names[t.SourceAccount] || t.SourceAccount }, auditInfo_(t));
+    })
+  }, auditInfo_(c));
+}
+
+/** Ringkasan kontrak untuk pilihan "Bayar cicilan kredit kontrak" di form Pengeluaran (ikut getMasterData). */
+function contractOptions_(names) {
+  const today = todayStr_();
+  const payments = contractPaymentsMap_();
+  return readTable_('Contracts').map(function (c) {
+    const p = publicContract_(c, payments[c.ID] || [], today, names);
+    return { id: p.id, contractNo: p.contractNo, item: p.item, lender: p.lender, tenor: p.tenor, monthlyPayment: p.monthlyPayment,
+      paidMonths: p.paidMonths, nextInstallmentNo: p.nextInstallmentNo, nextDueDate: p.nextDueDate, status: p.status,
+      paymentAccount: p.paymentAccount, category: p.category };
+  });
+}
+
+function getContracts(data) {
+  const today = todayStr_();
+  const names = nameMap_();
+  const payments = contractPaymentsMap_();
+  let list = readTable_('Contracts').map(function (c) { return publicContract_(c, payments[c.ID] || [], today, names); });
+  if (data && data.id) list = list.filter(function (c) { return c.id === data.id; });
+  if (data && data.status) list = list.filter(function (c) { return c.status === data.status; });
+  list.sort(function (a, b) {
+    if (a.status !== b.status) return a.status === 'Aktif' ? -1 : 1;
+    return (a.nextDueDate || a.endDate) < (b.nextDueDate || b.endDate) ? -1 : 1;
+  });
+  return ok_(list);
+}
+
+function contractRow_(data) {
+  const contractNo = requireString_(data.contractNo, 'Nomor kontrak', 40);
+  const item = requireString_(data.item, 'Pembelian', 80);
+  const tenor = toNumber_(data.tenor, 'Tenor (bulan)', 1, 360);
+  if (Math.round(tenor) !== tenor) throw appError_('Tenor harus bilangan bulat (bulan).');
+  const monthly = toAmount_(data.monthlyPayment, 'Nominal cicilan per bulan');
+  const firstDueDate = requireDate_(data.firstDueDate, 'Jatuh tempo cicilan pertama');
+  const paidBefore = toNumber_(data.paidBefore === '' || data.paidBefore === undefined ? 0 : data.paidBefore,
+    'Cicilan yang sudah dibayar sebelumnya', 0, tenor);
+  if (Math.round(paidBefore) !== paidBefore) throw appError_('Cicilan yang sudah dibayar harus bilangan bulat.');
+  const account = optionalString_(data.paymentAccount, 30);
+  if (account) {
+    const acc = findRow_('Accounts', account);
+    if (!acc) throw appError_('Rekening pembayaran tidak ditemukan.', 'NOT_FOUND');
+  }
+  const category = optionalString_(data.category, 40) || CONTRACT_CATEGORY;
+  const validCategory = readTable_('Categories').some(function (c) { return c.Name === category && c.Type === TYPE_EXPENSE; });
+  if (!validCategory) throw appError_('Kategori "' + category + '" tidak ditemukan pada kategori pengeluaran.');
+  return {
+    ContractNo: contractNo, Lender: optionalString_(data.lender, 60), Item: item, Tenor: tenor, MonthlyPayment: monthly,
+    FirstDueDate: firstDueDate, PaidBefore: paidBefore, PaymentAccount: account, Category: category,
+    Notes: optionalString_(data.notes, 200)
+  };
+}
+
+function saveContract(data) {
+  const row = contractRow_(data);
+  const contracts = readTable_('Contracts');
+  const clash = contracts.some(function (c) { return c.ContractNo.toLowerCase() === row.ContractNo.toLowerCase() && c.ID !== data.id; });
+  if (clash) throw appError_('Nomor kontrak ' + row.ContractNo + ' sudah terdaftar.');
+  const now = nowStr_();
+  const payments = data.id ? (contractPaymentsMap_()[data.id] || []) : [];
+  if (row.PaidBefore + payments.length > row.Tenor) {
+    throw appError_('Tenor ' + row.Tenor + ' bulan lebih kecil dari cicilan yang sudah dibayar (' + (row.PaidBefore + payments.length) +
+      '). Periksa tenor atau jumlah cicilan yang sudah dibayar sebelumnya.');
+  }
+  const progress = contractProgress_(row, payments, todayStr_());
+  row.PaidMonths = progress.paidMonths;
+  row.Status = progress.status;
+  row.EndDate = progress.endDate;
+  row.UpdatedAt = now;
+  let id = data.id;
+  if (id) {
+    if (!findRow_('Contracts', id)) throw appError_('Kontrak tidak ditemukan. Mungkin sudah dihapus.', 'NOT_FOUND');
+    updateRow_('Contracts', id, row);
+  } else {
+    id = nextSimpleId_('Contracts', 'KTR', 3);
+    row.ID = id;
+    row.CreatedAt = now;
+    insertRow_('Contracts', row);
+  }
+  return ok_({ id: id }, 'Kontrak ' + row.ContractNo + ' berhasil disimpan');
+}
+
+function deleteContract(data) {
+  const id = requireString_(data.id, 'ID kontrak', 40);
+  const contract = findRow_('Contracts', id);
+  if (!contract) throw appError_('Kontrak tidak ditemukan. Mungkin sudah dihapus.', 'NOT_FOUND');
+  const updates = {};
+  readTable_('Transactions').forEach(function (t) { if (t.ContractID === id) updates[t.ID] = { ContractID: '' }; });
+  const unlinked = Object.keys(updates).length;
+  rewriteColumns_('Transactions', updates);
+  deleteRowById_('Contracts', id);
+  return ok_({ id: id, unlinkedPayments: unlinked }, unlinked
+    ? 'Kontrak dihapus. ' + unlinked + ' pembayaran yang sudah tercatat tetap ada di jurnal sebagai pengeluaran.'
+    : 'Kontrak berhasil dihapus');
+}
+
+/** Bayar cicilan kontrak: mencatat Pengeluaran dari rekening, terhubung ke kontrak. */
+function payContract(data, user) {
+  const id = requireString_(data.contractId, 'Kontrak', 40);
+  const contract = findRow_('Contracts', id);
+  if (!contract) throw appError_('Kontrak tidak ditemukan. Mungkin sudah dihapus.', 'NOT_FOUND');
+  const progress = contractProgress_(contract, contractPaymentsMap_()[id] || [], todayStr_());
+  if (progress.status === 'Lunas') throw appError_('Kontrak ' + contract.ContractNo + ' sudah lunas.');
+  const payload = {
+    type: TYPE_EXPENSE, date: data.date, sourceAccount: data.sourceAccount || contract.PaymentAccount,
+    category: contract.Category || CONTRACT_CATEGORY, subCategory: data.subCategory || '',
+    amount: data.amount === undefined || data.amount === '' ? contract.MonthlyPayment : data.amount,
+    description: data.description || ('Cicilan ke-' + progress.nextInstallmentNo + ' ' + contract.Item + ' (' + contract.ContractNo + ')'),
+    paymentMethod: data.paymentMethod || '', attachment: data.attachment || '', contractId: id,
+    requestId: data.requestId, allowDuplicate: data.allowDuplicate
+  };
+  const result = addTransaction(payload, user);
+  if (result.success) {
+    result.message = 'Cicilan ke-' + progress.nextInstallmentNo + ' ' + contract.Item + ' berhasil dicatat' +
+      (progress.nextInstallmentNo >= (Number(contract.Tenor) || 1) ? '. Kontrak lunas!' : '');
+  }
+  return result;
+}
+
+/** Kontrak aktif yang jatuh tempo bulan ini atau sudah lewat jatuh tempo (untuk dashboard). */
+function contractDues_(today, names) {
+  const payments = contractPaymentsMap_();
+  return readTable_('Contracts').map(function (c) { return publicContract_(c, payments[c.ID] || [], today, names); })
+    .filter(function (c) { return c.status === 'Aktif' && c.dueThisMonth; })
+    .sort(function (a, b) { return a.nextDueDate < b.nextDueDate ? -1 : 1; })
+    .map(function (c) {
+      return { id: c.id, contractNo: c.contractNo, item: c.item, lender: c.lender, amount: c.monthlyPayment, dueDate: c.nextDueDate,
+        daysToDue: c.daysToDue, overdue: c.overdue, installmentNo: c.nextInstallmentNo, tenor: c.tenor };
+    });
+}
+
 /* =========================== KATEGORI =========================== */
 
 function publicCategory_(c) {
-  return {
+  return Object.assign({
     id: c.ID, name: c.Name, type: c.Type, color: c.Color || '#64748b', active: isTrue_(c.Active),
     subCategories: String(c.SubCategories || '').split(',').map(function (s) { return s.trim(); }).filter(String)
-  };
+  }, auditInfo_(c));
 }
 
 function getCategories() {
@@ -472,7 +729,7 @@ function expenseEntries_() {
     const first = installmentFirstBilling_(i);
     for (let k = 0; k < i.Tenor; k++) {
       entries.push({ date: addMonthsStr_(first, k), category: category,
-        amount: i.MonthlyPayment + (k === 0 ? (Number(i.AdminFee) || 0) : 0), viaCard: true, installment: true });
+        amount: installmentMonthAmount_(i, k), viaCard: true, installment: true });
     }
   });
   return entries;
@@ -539,8 +796,8 @@ function budgetReport_(period, entries) {
     const budget = budgetRow ? budgetRow.Amount : 0;
     const actual = stats.byCategory[name] || 0;
     const calc = calculateBudgetRemaining_(budget, actual);
-    return { id: budgetRow ? budgetRow.ID : '', category: name, color: colors[name] || '#94a3b8', budget: budget,
-      actual: actual, remaining: calc.remaining, percent: calc.percent };
+    return Object.assign({ id: budgetRow ? budgetRow.ID : '', category: name, color: colors[name] || '#94a3b8', budget: budget,
+      actual: actual, remaining: calc.remaining, percent: calc.percent }, auditInfo_(budgetRow));
   });
   const totalBudget = items.reduce(function (s, i) { return s + i.budget; }, 0);
   const totalActual = items.reduce(function (s, i) { return s + i.actual; }, 0);
@@ -664,6 +921,7 @@ function getDashboard(data) {
     pendingShopping: { count: pendingShopping.length, items: pendingShopping.slice(0, 5).map(publicShopping_) },
     todayAgenda: todayAgenda,
     upcomingBills: upcomingBills,
+    contractDues: contractDues_(today, names),
     activeInstallments: installments
   });
 }

@@ -1,0 +1,13 @@
+{
+  "app": "Homie",
+  "version": "3.2.0",
+  "files": [
+    "Code.gs",
+    "Database.gs",
+    "Finance.gs",
+    "Transactions.gs",
+    "Shopping.gs",
+    "Agenda.gs",
+    "Documents.gs"
+  ]
+}

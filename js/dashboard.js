@@ -67,15 +67,22 @@ export async function renderDashboard(container) {
       ${data.pendingShopping.count > 5 ? `<div class="small text-muted mt-2">+${data.pendingShopping.count - 5} item lainnya</div>` : ''}`
     : emptyState('bi-bag-check', 'Semua belanja bulan ini sudah dibeli.');
 
-  const billsHtml = data.upcomingBills.length
-    ? `<ul class="simple-list">${data.upcomingBills.map((c) => `
+  const contractDues = data.contractDues || [];
+  const contractHtml = contractDues.map((c) => `
+      <li><div class="icon-circle icon-sm icon-${c.overdue ? 'danger' : 'secondary'}"><i class="bi bi-file-earmark-text"></i></div>
+        <div class="flex-grow-1 min-w-0"><div class="fw-semibold text-truncate">${escapeHtml(c.item)}</div>
+        <small class="${c.overdue ? 'text-danger' : 'text-muted'}">Kontrak ${escapeHtml(c.contractNo)} · ke-${c.installmentNo}/${c.tenor} · ${formatDateShort(c.dueDate)} · ${relativeDayLabel(c.dueDate)}</small></div>
+        <div class="text-end fw-semibold text-nowrap">${formatCompactRupiah(c.amount)}</div></li>`).join('');
+  const billsHtml = data.upcomingBills.length || contractDues.length
+    ? `<ul class="simple-list">${contractHtml}${data.upcomingBills.map((c) => `
       <li><div class="icon-circle icon-sm icon-warning"><i class="bi bi-credit-card"></i></div>
         <div class="flex-grow-1 min-w-0"><div class="fw-semibold">${escapeHtml(c.name)}</div>
         <small class="text-muted">Jatuh tempo ${formatDateShort(c.nextDueDate)} · ${relativeDayLabel(c.nextDueDate)}</small></div>
         <div class="text-end"><div class="fw-semibold">${formatCompactRupiah(c.bill)}</div>
         <small class="text-muted">Min ${formatCompactRupiah(c.minimumPayment)}</small></div></li>`).join('')}</ul>`
-    : emptyState('bi-emoji-smile', 'Tidak ada tagihan kartu kredit.');
-  const billsLink = '<a href="#/keuangan/bayar-kartu" class="section-link">Bayar</a>';
+    : emptyState('bi-emoji-smile', 'Tidak ada tagihan kartu kredit atau kontrak bulan ini.');
+  const billsLink = contractDues.length && !data.upcomingBills.length
+    ? '<a href="#/keuangan/cicilan" class="section-link">Cicilan</a>' : '<a href="#/keuangan/kartu" class="section-link">Bayar</a>';
 
   const installmentHtml = data.activeInstallments.length
     ? `<ul class="simple-list">${data.activeInstallments.map((i) => `
@@ -126,7 +133,7 @@ export async function renderDashboard(container) {
     <div class="row g-3">
       <div class="col-md-6 col-xxl-3">${sectionCard('Agenda Hari Ini', 'bi-calendar-event', agendaHtml, '<a href="#/agenda" class="section-link">Agenda</a>')}</div>
       <div class="col-md-6 col-xxl-3">${sectionCard(`Belanja Belum Selesai <span class="count-pill">${data.pendingShopping.count}</span>`, 'bi-cart3', shoppingHtml, '<a href="#/belanja" class="section-link">Belanja</a>')}</div>
-      <div class="col-md-6 col-xxl-3">${sectionCard('Tagihan Kartu Terdekat', 'bi-bell', billsHtml, billsLink)}</div>
+      <div class="col-md-6 col-xxl-3">${sectionCard('Tagihan Terdekat', 'bi-bell', billsHtml, billsLink)}</div>
       <div class="col-md-6 col-xxl-3">${sectionCard('Cicilan Aktif', 'bi-calendar2-range', installmentHtml, '<a href="#/keuangan/cicilan" class="section-link">Cicilan</a>')}</div>
     </div>
     <p class="text-center small text-muted mt-4 mb-0"><i class="bi bi-hand-index me-1"></i>Ketuk kartu ringkasan untuk melihat angka lengkap.</p>`;

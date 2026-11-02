@@ -101,7 +101,8 @@ homie/
 │   ├── config.example.js       Contoh konfigurasi → salin menjadi config.js
 │   ├── dashboard.js            Dashboard
 │   ├── finance.js              Keuangan: ringkasan, rekening, form transaksi, jurnal, anggaran, kategori
-│   ├── creditcard.js           Kartu kredit, bayar kartu, cicilan
+│   ├── creditcard.js           Kartu kredit, tabel pembelian, bayar tagihan
+│   ├── contracts.js            Cicilan & Kredit: cicilan kartu + kredit kontrak
 │   ├── shopping.js             Belanja Mandatory & Complementary
 │   ├── agenda.js               Tugas, kalender, agenda harian
 │   ├── documents.js            Dokumen keluarga & pengingat masa berlaku
@@ -129,20 +130,19 @@ homie/
 
 | Menu | Isi |
 |---|---|
-| **Dashboard** | Total saldo, pemasukan & pengeluaran bulan berjalan, tagihan kartu, total & sisa anggaran (angka ringkas `Rp15,4 Jt`, ketuk untuk angka lengkap), Cash Position per rekening, grafik donat porsi pengeluaran, 5 transaksi terakhir, belanja belum selesai, agenda hari ini, tagihan kartu terdekat, cicilan aktif. |
+| **Dashboard** | Total saldo, pemasukan & pengeluaran bulan berjalan, tagihan kartu, total & sisa anggaran (angka ringkas `Rp15,4 Jt`, ketuk untuk angka lengkap), Cash Position per rekening, grafik donat porsi pengeluaran, 5 transaksi terakhir, belanja belum selesai, agenda hari ini, tagihan terdekat (kartu kredit + kredit kontrak yang jatuh tempo bulan ini), cicilan aktif. |
 | **Keuangan → Ringkasan** | Total aset kas, saldo rekening, saldo tunai, tagihan kartu (+ limit terpakai), cicilan belum ditagih, pemasukan, pengeluaran, cash flow; filter bulan & tahun. |
 | **Keuangan → Rekening** | Mandiri, BRI, BCA, BLU, Cash Bapak, Cash Ibu (bisa ditambah). Saldo awal, total pemasukan/pengeluaran, transfer masuk/keluar, status aktif. Saldo dihitung otomatis. |
-| **Tambah transaksi** | Pemasukan, Pengeluaran, Transfer, Pembayaran kartu kredit, Cicilan. ID unik `TRX-20260928-0001`. Field tujuan otomatis nonaktif kecuali transfer/bayar kartu. Sumber kartu kredit memunculkan pilihan *Transaksi biasa / Cicilan* dengan kalkulator cicilan otomatis. Lampiran berupa link Google Drive. |
+| **Tambah transaksi** | Pemasukan, Pengeluaran, Transfer, Pembayaran kartu kredit. ID unik `TRX-20260928-0001`. Field tujuan otomatis nonaktif kecuali transfer/bayar kartu. **Pengeluaran dengan sumber kartu kredit membuka opsi *Bayar penuh / Cicilan*** dengan kalkulator cicilan otomatis (sumber rekening/tunai menampilkan petunjuk untuk memilih kartu). Pengeluaran dari rekening/tunai bisa dipilih sebagai **pembayaran kredit kontrak**: nominal, kategori, dan keterangan terisi otomatis dan cicilan ke- kontrak naik. Lampiran berupa link Google Drive. |
 | **Keuangan → Jurnal** | Tabel (desktop) / daftar kartu (HP): tanggal, ID, jenis, rekening, kategori, keterangan, masuk, keluar. Filter tanggal/bulan/tahun/rekening/kategori/jenis, pencarian, urutkan, pagination, **Export Excel & PDF**, lihat detail, edit, hapus. |
-| **Kartu Kredit** | Mandiri Visa & Tokopedia Card: limit, limit terpakai (outstanding), available limit, **tagihan saat ini**, cicilan belum ditagih, tanggal cetak, jatuh tempo, minimum payment. |
-| **Bayar Kartu** | Rincian tagihan per kartu (belanja kartu + cicilan yang sudah ditagihkan − pembayaran) dan cicilan yang ditagih bulan ini. Bayar dari Mandiri/BRI/BCA/BLU (penuh/minimum); **tidak** dihitung pengeluaran dua kali. |
-| **Cicilan** | Nama, kartu, harga, tenor, cicilan/bulan, sudah ditagihkan, belum ditagih, tagihan berikutnya, jadwal tagihan tiap **tanggal 16**, status Aktif/Lunas, progress bar & `████░░░░`. |
+| **Kartu Kredit** | Per kartu: **nomor kartu** (hanya 4 digit terakhir, tampil `•••• •••• •••• 4321`), limit, limit terpakai, available limit, tanggal cetak, jatuh tempo, minimum payment, dan tabel **Pembelian, Tenor, Cicilan ke-, Nominal, Selesai pada, Tagihan bulan ini** (cicilan aktif + belanja bayar penuh bulan ini) dengan total tagihan bulan ini. Ketuk baris untuk detail transaksi. Rincian tagihan (belanja + cicilan ditagihkan − pembayaran), tombol **Bayar tagihan** (penuh/minimum, tidak dihitung pengeluaran dua kali), dan riwayat pembayaran kartu. |
+| **Cicilan & Kredit** | **Satu daftar untuk semua cicilan keluarga**: cicilan kartu kredit dan kredit kontrak (leasing, KPR, kredit elektronik, paylater) dengan kolom Kartu/Nomor Kontrak, Pembelian, Tenor, Cicilan ke-, Nominal, Selesai pada; ringkasan cicilan per bulan & sisa; filter status dan jenis. Tombol **Catat cicilan** menanyakan satu hal (lewat kartu kredit atau kredit kontrak) lalu membuka form yang sesuai. Kontrak: rekam/ubah/hapus, tombol **Bayar**, riwayat pembayaran, "sudah dibayar" diperkirakan otomatis dari jatuh tempo pertama. Cicilan kartu: jadwal tagihan tiap **tanggal 16**, ubah lewat transaksinya. |
 | **Anggaran** | Budget per kategori, realisasi, sisa, persentase + progress bar; tambah/edit/hapus kategori, ubah budget, salin budget bulan lalu. |
 | **Laporan** | Bulanan (saldo awal, pemasukan, pengeluaran, transfer, bayar kartu, saldo akhir) & tahunan (per bulan, cash flow, per kategori, budget vs realisasi) dengan grafik; export Excel & PDF. |
 | **Belanja** | Mandatory (otomatis disalin dari bulan lalu saat bulan baru) & Complementary (kosong tiap bulan, tombol **Salin Bulan Lalu**). Centang barang yang dibeli → **Catat ke Keuangan / Selesai Belanja**: satu struk jadi satu transaksi Pengeluaran (tunai, rekening, atau kartu kredit). Budget & terpakai sama dengan anggaran di Keuangan, plus "belum dicatat" dan perkiraan sisa budget. |
 | **Agenda** | Urutan: Tugas → Kalender bulanan → Agenda tanggal terpilih. Tambah/edit/hapus, tandai selesai, prioritas, status, penanggung jawab. |
 | **Lainnya → Dokumen Keluarga** | KK, dokumen Bapak/Ibu/Anak, nomor disamarkan, link Drive, badge masa berlaku: ≤90 hari *Perhatian*, ≤30 hari *Segera diperpanjang*, lewat *Expired*. |
-| **Pengaturan** | Light/Dark mode (disimpan di localStorage), angka ringkas, **Akun Saya** (foto profil, ganti nama, ganti PIN), kelola rekening/kartu/kategori, aturan transfer & tanggal tagihan cicilan (Admin), **Kelola Akun Pengguna** (Admin: ubah nama, foto, role, status, reset PIN semua akun), **Backup** (CSV transaksi, Excel semua data, PDF laporan, tanggal backup terakhir), hapus data contoh, tes koneksi. |
+| **Pengaturan** | Light/Dark mode (disimpan di localStorage), angka ringkas, **Akun Saya** (foto profil, ganti nama, ganti PIN), kelola rekening/kartu/kategori, aturan transfer & tanggal tagihan cicilan (Admin), **Kelola Akun Pengguna** (Admin: ubah nama, foto, role, status, reset PIN semua akun), **Backup** (tombol **Backup ke Google Drive** ke link folder yang diisi Admin, CSV transaksi, Excel semua data, PDF laporan, tanggal backup terakhir), hapus data contoh, tes koneksi. |
 
 Lainnya: toast notification, loading bar + skeleton, penanganan offline/API gagal, validasi frontend **dan** backend,
 PWA (Add to Home Screen), bottom navigation di HP dan sidebar di desktop.
@@ -170,10 +170,10 @@ Aksi API yang tersedia (semua dikirim sebagai POST ke Web App URL):
 
 | Kelompok | Aksi |
 |---|---|
-| GET (baca) | `getDashboard`, `getSummary`, `getTransactions`, `getAccounts`, `getBudgets`, `getCreditCards`, `getInstallments`, `getCategories`, `getReport`, `getShopping`, `getAgenda`, `getDocuments`, `getSettings`, `getMasterData`, `exportAll`, `ping`, `getUsers` |
-| POST (tambah) | `addTransaction`, `payCreditCard`, `addShopping`, `addAgenda`, `addDocument`, `copyShopping`, `copyBudget` |
-| UPDATE | `updateTransaction`, `updateShopping`, `updateAgenda`, `updateDocument`, `saveAccount`, `saveCreditCard`, `saveCategory`, `saveBudget`, `updateSettings`, `saveUser`, `changePin`, `recordBackup` |
-| DELETE | `deleteTransaction`, `deleteShopping`, `deleteAgenda`, `deleteDocument`, `deleteCategory`, `deleteSampleData` |
+| GET (baca) | `getDashboard`, `getSummary`, `getTransactions`, `getAccounts`, `getBudgets`, `getCreditCards`, `getInstallments`, `getContracts`, `getCategories`, `getReport`, `getShopping`, `getAgenda`, `getDocuments`, `getSettings`, `getMasterData`, `exportAll`, `ping`, `getUsers` |
+| POST (tambah) | `addTransaction`, `payCreditCard`, `payContract`, `backupToDrive`, `addShopping`, `addAgenda`, `addDocument`, `copyShopping`, `copyBudget` |
+| UPDATE | `updateTransaction`, `updateShopping`, `updateAgenda`, `updateDocument`, `saveAccount`, `saveCreditCard`, `saveContract`, `saveCategory`, `saveBudget`, `updateSettings`, `saveUser`, `changePin`, `recordBackup` |
+| DELETE | `deleteTransaction`, `deleteContract`, `deleteShopping`, `deleteAgenda`, `deleteDocument`, `deleteCategory`, `deleteSampleData` |
 | Sesi | `login`, `logout` |
 
 Contoh permintaan:
@@ -195,11 +195,12 @@ Spreadsheet: **Database Homie**. Semua sheet & header dibuat otomatis oleh `setu
 |---|---|
 | **Users** | ID, Name, Role, PinHash, Active, CreatedAt, Photo, UpdatedAt |
 | **Accounts** | ID, AccountName, AccountType, OpeningBalance, CurrentBalance, Active |
-| **Transactions** | ID, Date, Type, SourceAccount, DestinationAccount, Category, SubCategory, Amount, Description, PaymentMethod, CreatedBy, CreatedAt, UpdatedAt, Attachment |
+| **Transactions** | ID, Date, Type, SourceAccount, DestinationAccount, Category, SubCategory, Amount, Description, PaymentMethod, CreatedBy, CreatedAt, UpdatedAt, Attachment, ContractID |
 | **Categories** | ID, Name, Type, SubCategories, Color, Active |
 | **Budgets** | ID, Month, Year, Category, Amount |
-| **CreditCards** | ID, CardName, Bank, Limit, Outstanding, AvailableLimit, StatementDate, DueDate, MinimumPayment, Active, CurrentBill |
+| **CreditCards** | ID, CardName, Bank, Limit, Outstanding, AvailableLimit, StatementDate, DueDate, MinimumPayment, Active, CurrentBill, CardNumber |
 | **Installments** | ID, TransactionID, CardID, Description, Principal, Interest, AdminFee, Tenor, MonthlyPayment, TotalAmount, PaidMonths, RemainingMonths, StartDate, EndDate, Status, FirstBillingDate |
+| **Contracts** | ID, ContractNo, Lender, Item, Tenor, MonthlyPayment, FirstDueDate, EndDate, PaidBefore, PaidMonths, Status, PaymentAccount, Category, Notes, CreatedAt, UpdatedAt |
 | **Shopping** | ID, Month, Year, Group, Item, Category, Quantity, Unit, EstimatedPrice, ActualPrice, Status, Notes, TransactionID, PurchaseDate |
 | **Agenda** | ID, Title, Date, Time, Category, Owner, Priority, Status, Description |
 | **FamilyDocuments** | ID, Owner, DocumentType, DocumentName, DocumentNumber, IssueDate, ExpiryDate, DriveURL, Notes |
@@ -213,7 +214,18 @@ Catatan kolom:
   `CreditCards.CurrentBill` (tagihan saat ini), `Installments.FirstBillingDate` (tanggal tagihan cicilan pertama),
   `Shopping.TransactionID` & `PurchaseDate` (kaitan item belanja dengan transaksi Keuangan). Database versi 1 diperbarui **otomatis**
   pada request pertama setelah kode baru di-deploy (header baru ditambahkan, data lama tidak diubah).
-- `PaidMonths` cicilan = jumlah bulan yang **sudah ditagihkan** ke kartu (dibayar lewat Bayar Kartu).
+- **Versi 3** menambah sheet **Contracts** (kredit kontrak), kolom `Transactions.ContractID` (pembayaran yang terhubung ke kontrak),
+  `CreditCards.CardNumber` (hanya 4 digit terakhir; nomor lengkap kartu ditolak), kategori **Kredit & Cicilan**, dan setting `BACKUP_FOLDER_URL`.
+  Database versi 2 diperbarui otomatis dengan cara yang sama.
+- **Versi 4** menambah kolom pencatat `CreatedBy`, `CreatedAt`, `UpdatedBy`, `UpdatedAt` di ujung kanan sheet Accounts, Categories, Budgets,
+  CreditCards, Installments, Shopping, Agenda, FamilyDocuments (Transactions dapat `UpdatedBy`, Contracts dapat `CreatedBy` & `UpdatedBy`).
+  Kolom ini diisi otomatis oleh server dengan nama pengguna yang sedang login, lalu tampil sebagai catatan kecil
+  *"Dicatat Ibu · 29/10/2026 10:02 · Diubah Bapak · 29/10/2026 11:30"* di bawah setiap data. Data contoh bertanda *Contoh*, data bawaan bertanda *Sistem*,
+  dan data lama dari sebelum versi 4 tidak menampilkan catatan sampai diubah. Catatan ini mengikuti nama login aplikasi
+  (PIN bersama), jadi bukan jejak audit tingkat produksi.
+- Kontrak: **Cicilan ke-** = `PaidBefore` (cicilan yang sudah dibayar sebelum dicatat di aplikasi) + jumlah pembayaran yang terhubung;
+  **Selesai pada** = jatuh tempo pertama + (tenor − 1) bulan. Menghapus kontrak tidak menghapus pembayarannya di Jurnal.
+- `PaidMonths` cicilan = jumlah bulan yang **sudah ditagihkan** ke kartu (dibayar lewat tombol Bayar tagihan di Kartu Kredit).
 - `SourceAccount`/`DestinationAccount`/`CardID` berisi ID (`ACC-001`, `CC-001`) agar nama rekening bisa diganti tanpa merusak data.
 - `Type` transaksi: `Pemasukan`, `Pengeluaran`, `Transfer`, `Pembayaran Kartu Kredit`, `Cicilan`.
 - `Installments.Interest` = bunga flat **% per bulan**. `CreditCards.MinimumPayment` = **persen** dari tagihan (default 10).
@@ -272,7 +284,7 @@ Semua angka dihitung dari transaksi — saldo tidak pernah diisi manual. Fungsi 
 
 - **Saldo rekening** = Saldo Awal + Pemasukan − Pengeluaran + Transfer Masuk − Transfer Keluar (pembayaran kartu dihitung sebagai transfer keluar ke kartu).
 - **Transfer** hanya memindahkan kas: tidak dihitung pemasukan/pengeluaran keluarga. Default: bank → Cash Bapak/Cash Ibu, dan antar bank (bisa dimatikan Admin). Transfer dari kas tunai nonaktif secara default.
-Hubungan **Pengeluaran – Kartu Kredit – Cicilan – Bayar Kartu** mengikuti kebiasaan pemakai kartu kredit di Indonesia, dan tidak ada yang dihitung dua kali:
+Hubungan **Pengeluaran – Kartu Kredit – Cicilan – Bayar tagihan kartu** mengikuti kebiasaan pemakai kartu kredit di Indonesia, dan tidak ada yang dihitung dua kali:
 
 | Kejadian | Saldo rekening | Limit kartu | Tagihan kartu | Pengeluaran/anggaran |
 |---|---|---|---|---|
@@ -281,7 +293,7 @@ Hubungan **Pengeluaran – Kartu Kredit – Cicilan – Bayar Kartu** mengikuti 
 | Beli dengan cicilan kartu | – | terpakai **seluruh** total cicilan | naik 1× cicilan setiap tanggal 16 | dicatat 1× cicilan per bulan (tgl 16) |
 | Bayar kartu | berkurang | kembali | turun | **bukan** pengeluaran |
 
-- **Tagihan saat ini** = belanja pakai kartu + cicilan yang sudah ditagihkan − pembayaran. Hanya ini yang bisa dibayar di **Bayar Kartu**;
+- **Tagihan saat ini** = belanja pakai kartu + cicilan yang sudah ditagihkan − pembayaran. Hanya ini yang bisa dibayar lewat **Bayar tagihan**;
   cicilan bulan berikutnya belum ditagih sehingga belum perlu dibayar.
 - **Limit terpakai (Outstanding)** = belanja pakai kartu + total seluruh cicilan − pembayaran. **Available Limit = Limit − Outstanding.**
   Bank langsung mengunci limit sebesar total cicilan, lalu limit kembali setiap kali tagihan dibayar.
@@ -313,6 +325,11 @@ Harap dibaca — aplikasi ini untuk keluarga, **bukan** sistem keamanan tingkat 
   Foto hanya dikirim ke pengguna yang sudah login; daftar nama di layar login tetap memakai huruf depan.
 - **Dokumen**: jangan pernah upload KTP/KK/paspor ke GitHub. Simpan di Google Drive pribadi dengan akses terbatas; aplikasi hanya menyimpan link & metadata. Nomor dokumen disamarkan di tampilan.
 - Repository tidak berisi password, OAuth secret, API key, atau service account. `localStorage` hanya dipakai untuk tema, preferensi tampilan, dan filter terakhir.
+- **Nomor kartu kredit**: hanya 4 digit terakhir yang disimpan. Jangan menulis nomor lengkap, CVV, atau tanggal kedaluwarsa kartu di mana pun dalam aplikasi.
+- **Homie Loader** (opsional) menjalankan kode server yang diambil dari GitHub Pages Anda. Keamanan server jadi bergantung juga pada keamanan akun GitHub:
+  aktifkan 2FA dan jangan beri akses tulis repository ke orang lain.
+- **Backup ke Google Drive** membuat salinan lengkap spreadsheet (termasuk hash PIN) ke folder yang linknya diisi Admin. Gunakan folder pribadi yang tidak dibagikan.
+  Fitur ini butuh izin Google Drive pada Apps Script (lihat *Cara update aplikasi*).
 - Siapa pun yang punya akses edit ke spreadsheet dapat mengubah data langsung. Bagikan spreadsheet hanya ke orang yang dipercaya.
 
 ## J. Testing checklist
@@ -331,7 +348,7 @@ Centang setelah setup (lihat juga Bagian C di docs/INSTALASI-1-GITHUB-GOOGLE.md)
 - [ ] Transfer Mandiri → Cash Bapak → saldo berpindah, pemasukan/pengeluaran bulan ini tidak berubah.
 - [ ] Transfer ke rekening yang sama ditolak; nominal negatif ditolak; saldo tidak cukup ditolak dengan pesan jelas.
 - [ ] Belanja dengan Mandiri Visa → outstanding naik, available limit turun; melebihi limit ditolak.
-- [ ] Bayar Kartu dari BCA → saldo BCA turun, tagihan turun, tidak menambah pengeluaran; nominal di atas tagihan saat ini ditolak.
+- [ ] Bayar tagihan kartu dari BCA → saldo BCA turun, tagihan turun, tidak menambah pengeluaran; nominal di atas tagihan saat ini ditolak.
 - [ ] Cicilan Rp6.000.000 × 6 bulan → Rp1.000.000/bulan, jadwal tagihan tanggal 16, limit langsung terpakai Rp6.000.000, tagihan hanya bertambah per bulan.
 - [ ] Anggaran: ubah budget, lihat realisasi & persentase, salin budget bulan lalu.
 - [ ] Belanja: Mandatory bulan ini otomatis terisi dari bulan lalu; Complementary → Salin Bulan Lalu.
@@ -365,6 +382,39 @@ Centang setelah setup (lihat juga Bagian C di docs/INSTALASI-1-GITHUB-GOOGLE.md)
 
 ## L. Cara update aplikasi
 
+### Update otomatis dengan Homie Loader (disarankan, mulai versi 3.2)
+
+Dengan **Homie Loader**, server (Apps Script) selalu mengikuti versi yang ada di GitHub Pages. Setelah dipasang sekali,
+update berikutnya cukup dengan memperbarui file di GitHub: tidak ada lagi menyalin file `.gs` atau membuat deployment baru.
+
+Pemasangan (sekali saja, ±5 menit):
+
+1. Pastikan file website versi 3.2 atau lebih baru sudah ada di GitHub (termasuk folder `google-apps-script/` dan file `google-apps-script/versi.json`),
+   lalu cek `https://USERNAME.github.io/REPO/google-apps-script/versi.json` terbuka di browser.
+2. Buka editor Apps Script. **Hapus** semua file `.gs` lama (Code, Database, Finance, Transactions, Shopping, Agenda, Documents).
+3. Buat file baru **`Loader`** (+ → Script), tempel isi `google-apps-script/loader/Loader.gs`, lalu isi `HOMIE_SOURCE_URL` dengan alamat GitHub Pages Anda
+   (diakhiri `/`). Untuk script standalone, isi juga `HOMIE_SPREADSHEET_ID`.
+4. **Project Settings** (ikon gerigi) → centang **Show "appsscript.json" manifest file in editor**. Buka `appsscript.json`, ganti isinya dengan
+   `google-apps-script/loader/appsscript.json`, lalu **Save**.
+5. Pilih fungsi **`izinkanAkses`** → **Run** → izinkan (Sheets, Drive, dan akses ke situs luar untuk mengambil kode dari GitHub Pages).
+   Di **Execution log** muncul "Kode server Homie versi … siap dipakai".
+6. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** URL Web App tetap sama, `js/config.js` tidak perlu diubah.
+7. Buka **Pengaturan → Koneksi & Tentang**: *Versi server* sama dengan *Versi website* dan ada label **update otomatis**.
+
+Setelah itu, setiap kali file di GitHub diperbarui, server memakai kode baru paling lambat 5 menit kemudian (atur di `HOMIE_CHECK_MINUTES`).
+Untuk memaksa sekarang juga, jalankan fungsi `perbaruiSekarang` dari editor. Perubahan struktur database tetap berjalan otomatis seperti biasa.
+
+Pengaman yang sudah ada:
+- Kode hanya diambil dari alamat `HOMIE_SOURCE_URL` yang ditulis di Loader, bukan dari alamat yang dikirim browser.
+- Rilis yang tidak lengkap, versinya tidak cocok dengan `versi.json`, atau berisi kesalahan sintaks **ditolak**, dan server tetap memakai versi terakhir yang berjalan.
+- Jika GitHub Pages sedang tidak bisa dihubungi, server tetap berjalan dengan versi tersimpan.
+- Kembali ke cara lama kapan saja: hapus file `Loader`, tempel lagi semua file `.gs`, kembalikan `appsscript.json`, lalu deploy versi baru.
+
+Catatan keamanan: dengan Loader, siapa pun yang bisa mengubah repository GitHub Anda bisa mengubah perilaku server (yang berjalan dengan izin
+Google Sheets & Drive akun Anda). Aktifkan verifikasi dua langkah (2FA) di akun GitHub dan jangan memberi akses tulis repository ke orang lain.
+
+### Update manual
+
 **Frontend** (HTML/CSS/JS):
 
 ```bash
@@ -378,6 +428,18 @@ GitHub Pages men-deploy ulang otomatis (1–2 menit). Untuk perubahan besar, nai
 **Backend** (`.gs`): tempel kode baru di editor Apps Script → Save → **Deploy → Manage deployments → Edit → Version: New version → Deploy**.
 Web App URL tidak berubah sehingga `config.js` tidak perlu diubah.
 
+**Update ke versi 3 (Kredit Kontrak & Backup ke Google Drive)**:
+
+1. Ganti isi semua file `.gs` di editor Apps Script dengan versi baru, lalu **Save**.
+2. Pilih fungsi **`aktifkanBackupDrive`** di dropdown lalu klik **Run** satu kali. Google akan meminta izin baru
+   (*See, edit, create, and delete all of your Google Drive files*) — izinkan seperti saat `setupDatabase`. Izin ini dipakai hanya untuk membuat salinan database ke folder backup.
+3. **Deploy → Manage deployments → Edit → Version: New version → Deploy.**
+4. Upload file frontend baru ke GitHub (termasuk `js/contracts.js` baru). Database diperbarui otomatis saat aplikasi dibuka.
+5. Admin membuka **Pengaturan → Backup**, menempel link folder Google Drive tujuan, klik **Simpan link**, lalu coba **Backup ke Google Drive**.
+
+**Update ke versi 3.1 (catatan pencatat)**: ganti isi semua file `.gs` → Save → Deploy versi baru, lalu upload ulang folder `js/`, `css/`
+dan `service-worker.js`. Kolom pencatat ditambahkan otomatis saat aplikasi dibuka (database versi 4), tidak ada fungsi yang perlu dijalankan.
+
 **Struktur database**: jangan mengganti nama sheet/kolom yang sudah ada. Jika menambah kolom baru, tambahkan di **akhir** array `SCHEMA` pada `Database.gs`,
 lalu naikkan `DB_VERSION` dan tambahkan langkah di `migrateDatabase_()` — header baru ditambahkan otomatis saat request pertama setelah deploy. Nama fungsi API sebaiknya tidak diubah agar frontend lama tetap kompatibel.
 
@@ -386,6 +448,9 @@ lalu tambahkan aksinya di `ROUTES` pada `Code.gs`.
 
 ## Backup database
 
+- **Pengaturan → Backup → Backup ke Google Drive**: membuat salinan lengkap spreadsheet bernama `Backup Homie yyyy-MM-dd HH.mm` ke folder Google Drive
+  yang linknya diisi Admin (contoh `https://drive.google.com/drive/folders/1AbC…`). Semua pengguna selain Viewer bisa menekan tombolnya; hanya Admin yang bisa mengganti link.
+  Akun Google pemilik Apps Script harus punya akses Editor ke folder itu.
 - **Pengaturan → Backup**: *Export transaksi (CSV)*, *Export semua data (Excel)* — satu sheet per tabel, *Download laporan bulan ini (PDF)*. Tanggal backup terakhir tercatat di sheet Settings dan tampil di menu tersebut.
 - Manual: di Google Sheets pilih **File → Buat salinan** (atau *File → Download → Microsoft Excel*). Google Sheets juga menyimpan **Riwayat versi** (File → Riwayat versi).
 - Sarankan backup minimal sebulan sekali dan simpan file backup di tempat pribadi (bukan di repository GitHub).

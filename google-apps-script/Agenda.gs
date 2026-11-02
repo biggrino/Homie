@@ -7,10 +7,10 @@ const AGENDA_PRIORITIES = ['Rendah', 'Sedang', 'Tinggi'];
 const AGENDA_STATUS = ['Belum', 'Proses', 'Selesai'];
 
 function publicAgenda_(a) {
-  return {
+  return Object.assign({
     id: a.ID, title: a.Title, date: a.Date, time: a.Time, category: a.Category, owner: a.Owner,
     priority: a.Priority, status: a.Status, description: a.Description
-  };
+  }, auditInfo_(a));
 }
 
 function getAgenda(data) {

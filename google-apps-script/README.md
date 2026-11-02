@@ -27,8 +27,20 @@ Urutan file tidak berpengaruh — semua file `.gs` berbagi satu ruang global.
 | `setupDatabase` | Membuat sheet + header, data default (rekening, kartu, kategori, pengguna PIN 1234) dan data contoh. Aman diulang — data yang ada tidak ditimpa. |
 | `gantiPinManual` | Reset PIN bila Admin lupa: ubah `namaPengguna` & `pinBaru` di dalam fungsi, lalu Run. |
 | `deleteSampleData` | Menghapus data contoh (sama dengan tombol di menu Pengaturan). |
+| `aktifkanBackupDrive` | Dijalankan sekali setelah update ke versi 3 agar Google meminta izin Drive untuk tombol *Backup ke Google Drive*. Tidak mengubah data. |
 
 Fungsi berakhiran `_` (misalnya `handleRequest_`) adalah fungsi internal.
+
+## Mode update otomatis (Homie Loader)
+
+Sebagai ganti semua file di atas, editor Apps Script cukup berisi `loader/Loader.gs` dan `loader/appsscript.json`.
+Loader mengambil file `.gs` yang terdaftar di `versi.json` dari situs GitHub Pages (`HOMIE_SOURCE_URL`), menyimpannya di Script Properties,
+dan memeriksa versi baru setiap `HOMIE_CHECK_MINUTES` menit. Fungsi editor yang tersedia: `izinkanAkses` (jalankan sekali setelah memasang),
+`perbaruiSekarang` (ambil kode terbaru sekarang), dan `setupDatabase`. Langkah lengkap ada di README utama → *Cara update aplikasi*.
+
+Saat merilis versi baru: naikkan `SERVER_VERSION` di `Code.gs`, `version` di `versi.json`, `APP_VERSION` di `js/settings.js`,
+dan `CACHE_VERSION` di `service-worker.js` dengan nomor yang sama. Jika menambah file `.gs`, daftarkan juga di `versi.json`
+dan `GAS_FILES` pada `js/demo-backend.js`.
 
 ## Format API
 
@@ -48,14 +60,20 @@ Respons selalu:
 `code` membantu frontend: `AUTH_REQUIRED` (login ulang), `FORBIDDEN` (role tidak cukup), `DUPLICATE` (transaksi kembar — kirim ulang dengan
 `allowDuplicate: true` bila memang disengaja), `INSUFFICIENT`, `OVER_LIMIT`, `NOT_FOUND`, `VALIDATION`, `BUSY`.
 
+Aksi versi 3: `getContracts` (`{ id?, status? }`), `saveContract` (`{ id?, contractNo, lender, item, tenor, monthlyPayment, firstDueDate,
+paidBefore, paymentAccount, category, notes }`), `deleteContract` (`{ id }`, pembayaran tetap di Jurnal), `payContract`
+(`{ contractId, date, sourceAccount, amount }` → mencatat Pengeluaran yang terhubung ke kontrak), dan `backupToDrive` (membuat salinan
+spreadsheet ke folder `BACKUP_FOLDER_URL`; kode error `NO_BACKUP_FOLDER` / `BACKUP_FAILED`). `getCreditCards` kini mengembalikan
+`cardNumber` (4 digit terakhir), `purchases` (tabel pembelian per kartu), dan `billThisMonth`.
+
 `GET` hanya melayani `ping` dan `getUsers` (membuka Web App URL di browser = cek API aktif).
 
 ## Hak akses
 
 | Role | Hak |
 |---|---|
-| Admin | Semua fungsi, termasuk pengguna, aturan transfer, hapus data contoh |
-| Bapak, Ibu | Melihat dan mengubah data |
+| Admin | Semua fungsi, termasuk pengguna, aturan transfer, link folder backup, hapus data contoh |
+| Bapak, Ibu | Melihat dan mengubah data, termasuk kredit kontrak dan tombol Backup ke Google Drive |
 | Viewer | Hanya melihat (semua aksi tulis ditolak di backend) |
 
 ## Catatan teknis

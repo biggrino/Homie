@@ -14,11 +14,11 @@ function documentExpiry_(expiryDate, today) {
 
 function publicDocument_(d, today) {
   const expiry = documentExpiry_(d.ExpiryDate, today || todayStr_());
-  return {
+  return Object.assign({
     id: d.ID, owner: d.Owner, documentType: d.DocumentType, documentName: d.DocumentName,
     documentNumber: d.DocumentNumber, issueDate: d.IssueDate, expiryDate: d.ExpiryDate, driveUrl: d.DriveURL,
     notes: d.Notes, expiryStatus: expiry.status, expiryLevel: expiry.level, daysLeft: expiry.daysLeft
-  };
+  }, auditInfo_(d));
 }
 
 function getDocuments(data) {

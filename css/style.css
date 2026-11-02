@@ -339,13 +339,46 @@ select:disabled, .form-select:disabled { opacity: .65; }
   background: radial-gradient(circle at 100% 0%, rgba(255, 255, 255, .25), transparent 45%), linear-gradient(135deg, #1e293b, #0f766e);
   box-shadow: 0 10px 24px rgba(15, 23, 42, .25);
 }
-.col-md-6:nth-child(2n) .credit-card-visual { background: radial-gradient(circle at 100% 0%, rgba(255, 255, 255, .25), transparent 45%), linear-gradient(135deg, #7c2d12, #f97316); }
+.cc-list > .card:nth-child(2n) .credit-card-visual, .col-md-6:nth-child(2n) .credit-card-visual { background: radial-gradient(circle at 100% 0%, rgba(255, 255, 255, .25), transparent 45%), linear-gradient(135deg, #7c2d12, #f97316); }
 .credit-card-visual.inactive { filter: grayscale(1); opacity: .6; }
 .cc-bank { font-size: .75rem; opacity: .8; text-transform: uppercase; letter-spacing: .08em; }
 .cc-name { font-weight: 800; font-size: 1.1rem; }
 .cc-chip { width: 40px; height: 30px; border-radius: 6px; background: linear-gradient(135deg, #fde68a, #d97706); opacity: .9; }
 .cc-label { font-size: .7rem; opacity: .75; }
 .cc-amount { font-size: 1.25rem; font-weight: 800; }
+.cc-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; letter-spacing: .12em; opacity: .95; white-space: nowrap; }
+
+/* ---------- Tabel bertumpuk (kontrak & pembelian kartu): tabel di layar lebar, kartu per baris di HP ---------- */
+.stack-table th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--app-muted); font-weight: 700;
+  background: var(--app-surface-2); white-space: nowrap; }
+.stack-table td { font-size: .87rem; }
+.stack-table tfoot td { background: var(--app-surface-2); border-bottom: 0; }
+.card-purchase-table tbody tr { cursor: pointer; }
+.contract-table .contract-progress { max-width: 140px; }
+.form-more > summary { cursor: pointer; color: var(--app-primary); padding: 4px 0; }
+.form-more[open] > summary { margin-bottom: 4px; }
+.contract-table tr.row-overdue > td { background: rgba(220, 38, 38, .06); }
+@media (max-width: 767.98px) {
+  .stack-table thead { display: none; }
+  .stack-table, .stack-table tbody, .stack-table tfoot, .stack-table tr, .stack-table td { display: block; width: 100%; }
+  .stack-table tr { border-bottom: 1px solid var(--app-border); padding: 10px 12px; }
+  .stack-table td { border: 0; padding: 3px 0; text-align: right !important; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .stack-table td::before { content: attr(data-label); font-size: .75rem; color: var(--app-muted); font-weight: 600; text-align: left; flex-shrink: 0; }
+  .stack-table td > * { text-align: right; }
+  .stack-table td[data-label="Nomor Kontrak"], .stack-table td[data-label="Pembelian"] { display: block; text-align: left !important; }
+  .stack-table td[data-label="Nomor Kontrak"]::before, .stack-table td[data-label="Pembelian"]::before { display: none; }
+  .stack-table td[data-label="Nomor Kontrak"] > *, .stack-table td[data-label="Pembelian"] > * { text-align: left; }
+  .stack-table td[data-label="Nomor Kontrak"] .btn-link { font-size: 1rem; }
+  .stack-table td[data-label="Aksi"] { justify-content: flex-end; gap: 6px; padding-top: 8px; }
+  .stack-table td[data-label="Aksi"]::before { display: none; }
+  .stack-table tfoot tr { display: flex; justify-content: space-between; align-items: center; }
+  .stack-table tfoot td { width: auto; display: block; }
+  .stack-table tfoot td:empty { display: none; }
+  .stack-table tfoot td::before { display: none; }
+  .stack-table td:empty { display: none; }
+  .contract-table .contract-progress { max-width: none; width: 120px; margin-left: auto; }
+  .card-purchase-table { --bs-table-hover-bg: transparent; }
+}
 .text-progress { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1px; color: var(--app-primary); margin: 6px 0; font-size: .9rem; overflow: hidden; white-space: nowrap; }
 
 /* ---------- Belanja ---------- */
@@ -446,3 +479,8 @@ select:disabled, .form-select:disabled { opacity: .65; }
 .schedule-list span { font-size: .7rem; padding: 2px 6px; border-radius: 6px; background: var(--app-surface-2); border: 1px solid var(--app-border); }
 .schedule-list span.billed { background: var(--app-primary-soft); border-color: transparent; color: var(--app-primary); font-weight: 600; }
 @media (max-width: 575.98px) { .checkout-list .co-price { width: 120px; } }
+
+/* Catatan kecil pencatat data */
+.audit-note { display: block; font-size: .72rem; line-height: 1.3; color: var(--app-muted); margin-top: .15rem; overflow-wrap: anywhere; }
+.trx-main .audit-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .85; }
+.audit-note .bi { font-size: .7rem; opacity: .8; }

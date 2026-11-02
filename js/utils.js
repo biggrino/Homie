@@ -35,10 +35,15 @@ export function formatCompactRupiah(value) {
   const abs = Math.abs(amount);
   const sign = amount < 0 ? '-' : '';
   const units = [[1e12, 'T'], [1e9, 'M'], [1e6, 'Jt'], [1e3, 'Rb']];
-  for (const [size, label] of units) {
+  // Dibulatkan ke 1 desimal terdekat (bukan dipotong), lalu naik satuan bila hasilnya 1.000
+  // agar 999.990 tampil "Rp1 Jt", bukan "Rp1.000 Rb".
+  for (let u = 0; u < units.length; u++) {
+    const [size, label] = units[u];
     if (abs >= size) {
-      const scaled = Math.floor((abs / size) * 10) / 10;
-      return `${sign}Rp${scaled.toLocaleString('id-ID', { maximumFractionDigits: 1 })} ${label}`;
+      let scaled = Math.round((abs / size) * 10) / 10;
+      let unit = label;
+      if (scaled >= 1000 && u > 0) { scaled = Math.round((abs / units[u - 1][0]) * 10) / 10; unit = units[u - 1][1]; }
+      return `${sign}Rp${scaled.toLocaleString('id-ID', { maximumFractionDigits: 1 })} ${unit}`;
     }
   }
   return `${sign}Rp${abs}`;
@@ -164,13 +169,15 @@ export function calculateBudgetRemaining(budget, actual) {
   return { remaining: roundRupiah(budget - actual), percent: percent(actual, budget) };
 }
 
-/** Sama persis dengan calculateInstallment_ di Finance.gs (bunga flat per bulan, admin sekali di awal). */
+/** Sama persis dengan calculateInstallment_ di Finance.gs (bunga flat per bulan, admin ikut tagihan pertama). */
 export function calculateInstallment({ principal, tenor, interestRate = 0, adminFee = 0 }) {
   const p = roundRupiah(principal);
   const n = Math.max(1, Math.round(Number(tenor) || 1));
   const interestTotal = roundRupiah(p * (Number(interestRate) / 100) * n);
   const monthly = roundRupiah((p + interestTotal) / n);
-  return { interestTotal, monthly, total: monthly * n + roundRupiah(adminFee), tenor: n };
+  // Selisih pembulatan masuk ke cicilan terakhir agar total = harga + bunga + admin.
+  const last = p + interestTotal - monthly * (n - 1);
+  return { interestTotal, monthly, last, total: p + interestTotal + roundRupiah(adminFee), tenor: n };
 }
 
 /** Tanggal tagihan cicilan pertama: tanggal penagihan (default 16) pertama pada/sesudah tanggal transaksi. Sama dengan firstBillingDate_ di Finance.gs. */

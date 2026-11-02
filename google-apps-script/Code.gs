@@ -5,6 +5,8 @@
  */
 
 const APP_NAME = 'Homie';
+// Versi kode server. Harus sama dengan "version" di google-apps-script/versi.json dan APP_VERSION di js/settings.js.
+const SERVER_VERSION = '3.2.0';
 const APP_TIMEZONE = 'Asia/Jakarta';
 
 // Kosongkan jika script ini dibuat dari menu Extensions → Apps Script pada spreadsheet database
@@ -37,6 +39,7 @@ const ROUTES = {
   getBudgets: { fn: getBudgets },
   getCreditCards: { fn: getCreditCards },
   getInstallments: { fn: getInstallments },
+  getContracts: { fn: getContracts },
   getCategories: { fn: getCategories },
   getReport: { fn: getReport },
   getShopping: { fn: getShopping },
@@ -51,6 +54,9 @@ const ROUTES = {
   payCreditCard: { write: true, fn: payCreditCard },
   saveAccount: { write: true, fn: saveAccount },
   saveCreditCard: { write: true, fn: saveCreditCard },
+  saveContract: { write: true, fn: saveContract },
+  deleteContract: { write: true, fn: deleteContract },
+  payContract: { write: true, fn: payContract },
   saveCategory: { write: true, fn: saveCategory },
   deleteCategory: { write: true, fn: deleteCategory },
   saveBudget: { write: true, fn: saveBudget },
@@ -71,6 +77,7 @@ const ROUTES = {
   deleteDocument: { write: true, fn: deleteDocument },
 
   recordBackup: { write: true, fn: recordBackup },
+  backupToDrive: { write: true, fn: backupToDrive },
   updateSettings: { write: true, admin: true, fn: updateSettings },
   saveUser: { write: true, admin: true, fn: saveUser },
   deleteSampleData: { write: true, admin: true, fn: deleteSampleData }
@@ -101,6 +108,7 @@ function doPost(e) {
 /** Router utama. Dipakai oleh doGet/doPost dan juga oleh mode demo di browser. */
 function handleRequest_(body) {
   clearTableCache_();
+  setCurrentActor_('');
   try {
     body = body || {};
     const action = String(body.action || '');
@@ -125,6 +133,7 @@ function handleRequest_(body) {
       }
     }
 
+    setCurrentActor_(user ? user.name : '');
     const data = body.data || {};
     if (route.write) {
       return withLock_(function () { return route.fn(data, user); });
@@ -173,7 +182,12 @@ function jsonOutput_(obj) {
 }
 
 function apiPing_() {
-  return ok_({ app: APP_NAME, time: nowStr_(), timezone: APP_TIMEZONE }, 'API aktif');
+  return ok_({ app: APP_NAME, time: nowStr_(), timezone: APP_TIMEZONE, version: SERVER_VERSION, autoUpdate: serverAutoUpdate_() }, 'API aktif');
+}
+
+/** true bila kode ini dijalankan oleh Homie Loader (server ikut versi terbaru di GitHub Pages secara otomatis). */
+function serverAutoUpdate_() {
+  return typeof HOMIE_LOADER_VERSION !== 'undefined';
 }
 
 /* =========================== AUTENTIKASI =========================== */
@@ -345,7 +359,7 @@ function setUserPin(userName, newPin) {
 /* =========================== MASTER DATA & PENGATURAN =========================== */
 
 const PUBLIC_SETTINGS = ['APP_NAME', 'ALLOW_BANK_TO_BANK', 'ALLOW_CASH_TRANSFER', 'LAST_BACKUP', 'LAST_BACKUP_BY', 'DB_VERSION',
-  'SHOPPING_BUDGET_CATEGORY', 'INSTALLMENT_BILLING_DAY'];
+  'SHOPPING_BUDGET_CATEGORY', 'INSTALLMENT_BILLING_DAY', 'BACKUP_FOLDER_URL'];
 
 function getMasterData(data, user) {
   const ledger = buildLedger_();
@@ -354,6 +368,7 @@ function getMasterData(data, user) {
     accounts: accountsWithBalance_(ledger),
     cards: cardsWithOutstanding_(ledger),
     categories: readTable_('Categories').map(publicCategory_),
+    contracts: contractOptions_(nameMap_()),
     users: readTable_('Users').filter(function (u) { return isTrue_(u.Active); })
       .map(function (u) { return { id: u.ID, name: u.Name, role: u.Role, photo: u.Photo || '' }; }),
     settings: publicSettings_(),
@@ -366,6 +381,8 @@ function publicSettings_() {
   const out = {};
   PUBLIC_SETTINGS.forEach(function (k) { if (all[k] !== undefined) out[k] = all[k]; });
   out.SAMPLE_COUNT = parseJsonSafe_(all.SAMPLE_IDS, []).length;
+  out.SERVER_VERSION = SERVER_VERSION;
+  out.SERVER_AUTO_UPDATE = serverAutoUpdate_();
   return out;
 }
 
@@ -378,12 +395,14 @@ function getSettings(data, user) {
 }
 
 function updateSettings(data) {
-  const allowed = { ALLOW_BANK_TO_BANK: 'bool', ALLOW_CASH_TRANSFER: 'bool', SHOPPING_BUDGET_CATEGORY: 'text', INSTALLMENT_BILLING_DAY: 'day' };
+  const allowed = { ALLOW_BANK_TO_BANK: 'bool', ALLOW_CASH_TRANSFER: 'bool', SHOPPING_BUDGET_CATEGORY: 'text', INSTALLMENT_BILLING_DAY: 'day',
+    BACKUP_FOLDER_URL: 'folder' };
   Object.keys(data || {}).forEach(function (key) {
     if (!allowed[key]) return;
     let value;
     if (allowed[key] === 'bool') value = isTrue_(data[key]) ? 'TRUE' : 'FALSE';
     else if (allowed[key] === 'day') value = String(Math.round(toNumber_(data[key], 'Tanggal penagihan cicilan', 1, 28)));
+    else if (allowed[key] === 'folder') value = normalizeFolderUrl_(data[key]);
     else value = requireString_(data[key], key, 60);
     setSetting_(key, value);
   });
@@ -394,6 +413,75 @@ function recordBackup(data, user) {
   setSetting_('LAST_BACKUP', nowStr_());
   setSetting_('LAST_BACKUP_BY', user ? user.name : '-');
   return ok_(publicSettings_(), 'Tanggal backup dicatat');
+}
+
+/* =========================== BACKUP KE GOOGLE DRIVE =========================== */
+
+/** Menerima link folder Google Drive (atau ID foldernya) dan menyimpannya dalam bentuk link baku. */
+function normalizeFolderUrl_(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const id = driveFolderId_(text);
+  if (!id) {
+    throw appError_('Link folder Google Drive tidak dikenali. Buka foldernya di Google Drive lalu salin link dari address bar ' +
+      '(contoh: https://drive.google.com/drive/folders/1AbC...).');
+  }
+  return 'https://drive.google.com/drive/folders/' + id;
+}
+
+function driveFolderId_(text) {
+  const value = String(text || '').trim();
+  const m = /\/folders\/([A-Za-z0-9_-]{10,})/.exec(value) || /[?&]id=([A-Za-z0-9_-]{10,})/.exec(value);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(value) ? value : '';
+}
+
+/**
+ * Tombol "Backup ke Google Drive": membuat salinan lengkap spreadsheet database ke folder yang linknya
+ * diisi Admin di Pengaturan. Salinan memuat semua sheet (termasuk hash PIN), jadi folder harus privat.
+ */
+function backupToDrive(data, user) {
+  const folderUrl = getSetting_('BACKUP_FOLDER_URL', '');
+  const folderId = driveFolderId_(folderUrl);
+  if (!folderId) throw appError_('Link folder backup belum diisi. Admin dapat mengisinya di Pengaturan → Backup.', 'NO_BACKUP_FOLDER');
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(folderId);
+    folder.getName();
+  } catch (err) {
+    throw appError_(driveErrorMessage_(err, 'Folder backup tidak dapat dibuka. Pastikan link benar dan akun Google pemilik ' +
+      'spreadsheet punya akses Editor ke folder tersebut.'), 'BACKUP_FAILED');
+  }
+  const stamp = Utilities.formatDate(new Date(), APP_TIMEZONE, 'yyyy-MM-dd HH.mm');
+  const name = 'Backup ' + APP_NAME + ' ' + stamp;
+  let file;
+  try {
+    SpreadsheetApp.flush();
+    file = DriveApp.getFileById(getDb_().getId()).makeCopy(name, folder);
+  } catch (err) {
+    throw appError_(driveErrorMessage_(err, 'Gagal membuat salinan database di Google Drive: ' + (err && err.message ? err.message : err)), 'BACKUP_FAILED');
+  }
+  setSetting_('LAST_BACKUP', nowStr_());
+  setSetting_('LAST_BACKUP_BY', user ? user.name : '-');
+  return ok_({ name: name, fileUrl: file.getUrl(), folderUrl: folderUrl, settings: publicSettings_() },
+    'Backup tersimpan di Google Drive: ' + name);
+}
+
+function driveErrorMessage_(err, fallback) {
+  const text = String(err && err.message ? err.message : err);
+  if (/permission|izin|authoriz|DriveApp/i.test(text)) {
+    return 'Script belum diberi izin Google Drive. Pemilik spreadsheet: buka Apps Script, jalankan fungsi aktifkanBackupDrive ' +
+      'sekali (izinkan akses), lalu Deploy → Manage deployments → Edit → New version.';
+  }
+  return fallback;
+}
+
+/**
+ * Jalankan sekali dari editor Apps Script setelah memperbarui ke Homie v3 agar Google meminta izin Google Drive
+ * (dipakai tombol Backup ke Google Drive). Fungsi ini hanya membaca nama folder utama Drive Anda.
+ */
+function aktifkanBackupDrive() {
+  Logger.log('Izin Google Drive aktif. Folder utama: ' + DriveApp.getRootFolder().getName());
 }
 
 function exportAll() {

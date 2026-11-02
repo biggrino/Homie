@@ -2,24 +2,26 @@
  * Database.gs — skema Google Sheets, setup otomatis, helper baca/tulis tabel, dan data contoh.
  */
 
-const DB_VERSION = '2';
+const DB_VERSION = '4';
 
 const SCHEMA = {
   Users: ['ID', 'Name', 'Role', 'PinHash', 'Active', 'CreatedAt', 'Photo', 'UpdatedAt'],
-  Accounts: ['ID', 'AccountName', 'AccountType', 'OpeningBalance', 'CurrentBalance', 'Active'],
+  Accounts: ['ID', 'AccountName', 'AccountType', 'OpeningBalance', 'CurrentBalance', 'Active', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
   Transactions: ['ID', 'Date', 'Type', 'SourceAccount', 'DestinationAccount', 'Category', 'SubCategory', 'Amount',
-    'Description', 'PaymentMethod', 'CreatedBy', 'CreatedAt', 'UpdatedAt', 'Attachment'],
-  Categories: ['ID', 'Name', 'Type', 'SubCategories', 'Color', 'Active'],
-  Budgets: ['ID', 'Month', 'Year', 'Category', 'Amount'],
+    'Description', 'PaymentMethod', 'CreatedBy', 'CreatedAt', 'UpdatedAt', 'Attachment', 'ContractID', 'UpdatedBy'],
+  Categories: ['ID', 'Name', 'Type', 'SubCategories', 'Color', 'Active', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
+  Budgets: ['ID', 'Month', 'Year', 'Category', 'Amount', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
   CreditCards: ['ID', 'CardName', 'Bank', 'Limit', 'Outstanding', 'AvailableLimit', 'StatementDate', 'DueDate',
-    'MinimumPayment', 'Active', 'CurrentBill'],
+    'MinimumPayment', 'Active', 'CurrentBill', 'CardNumber', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
   Installments: ['ID', 'TransactionID', 'CardID', 'Description', 'Principal', 'Interest', 'AdminFee', 'Tenor',
-    'MonthlyPayment', 'TotalAmount', 'PaidMonths', 'RemainingMonths', 'StartDate', 'EndDate', 'Status', 'FirstBillingDate'],
+    'MonthlyPayment', 'TotalAmount', 'PaidMonths', 'RemainingMonths', 'StartDate', 'EndDate', 'Status', 'FirstBillingDate', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
   Shopping: ['ID', 'Month', 'Year', 'Group', 'Item', 'Category', 'Quantity', 'Unit', 'EstimatedPrice', 'ActualPrice',
-    'Status', 'Notes', 'TransactionID', 'PurchaseDate'],
-  Agenda: ['ID', 'Title', 'Date', 'Time', 'Category', 'Owner', 'Priority', 'Status', 'Description'],
+    'Status', 'Notes', 'TransactionID', 'PurchaseDate', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
+  Agenda: ['ID', 'Title', 'Date', 'Time', 'Category', 'Owner', 'Priority', 'Status', 'Description', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
   FamilyDocuments: ['ID', 'Owner', 'DocumentType', 'DocumentName', 'DocumentNumber', 'IssueDate', 'ExpiryDate',
-    'DriveURL', 'Notes'],
+    'DriveURL', 'Notes', 'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt'],
+  Contracts: ['ID', 'ContractNo', 'Lender', 'Item', 'Tenor', 'MonthlyPayment', 'FirstDueDate', 'EndDate', 'PaidBefore',
+    'PaidMonths', 'Status', 'PaymentAccount', 'Category', 'Notes', 'CreatedAt', 'UpdatedAt', 'CreatedBy', 'UpdatedBy'],
   Settings: ['Key', 'Value', 'Description']
 };
 
@@ -28,15 +30,52 @@ const SCHEMA = {
 const TEXT_COLUMNS = ['ID', 'Date', 'Time', 'StartDate', 'EndDate', 'IssueDate', 'ExpiryDate', 'CreatedAt', 'UpdatedAt',
   'DocumentNumber', 'PinHash', 'TransactionID', 'CardID', 'SourceAccount', 'DestinationAccount', 'Key', 'Value',
   'Description', 'Notes', 'Item', 'Title', 'Name', 'AccountName', 'CardName', 'DocumentName', 'SubCategories',
-  'Photo', 'FirstBillingDate', 'PurchaseDate'];
+  'Photo', 'FirstBillingDate', 'PurchaseDate', 'ContractID', 'ContractNo', 'Lender', 'FirstDueDate', 'PaymentAccount',
+  'CardNumber', 'CreatedBy', 'UpdatedBy'];
 
 const NUMBER_COLUMNS = ['OpeningBalance', 'CurrentBalance', 'Amount', 'Limit', 'Outstanding', 'AvailableLimit',
   'StatementDate', 'DueDate', 'MinimumPayment', 'Principal', 'Interest', 'AdminFee', 'Tenor', 'MonthlyPayment',
-  'TotalAmount', 'PaidMonths', 'RemainingMonths', 'Month', 'Year', 'Quantity', 'EstimatedPrice', 'ActualPrice', 'CurrentBill'];
+  'TotalAmount', 'PaidMonths', 'RemainingMonths', 'Month', 'Year', 'Quantity', 'EstimatedPrice', 'ActualPrice', 'CurrentBill',
+  'PaidBefore'];
+
+// Kolom uang selalu dibaca sebagai rupiah bulat, agar angka desimal yang diketik manual di Sheet
+// tidak membuat total berbeda dari jumlah baris yang tampil.
+const MONEY_COLUMNS = ['OpeningBalance', 'CurrentBalance', 'Amount', 'Limit', 'Outstanding', 'AvailableLimit',
+  'MinimumPayment', 'Principal', 'AdminFee', 'MonthlyPayment', 'TotalAmount', 'EstimatedPrice', 'ActualPrice', 'CurrentBill'];
 
 const BOOLEAN_COLUMNS = ['Active'];
 
 let TABLE_CACHE_ = {};
+
+// Nama pengguna yang sedang mengirim permintaan; dipakai untuk mengisi CreatedBy/UpdatedBy otomatis.
+let CURRENT_ACTOR_ = '';
+
+function setCurrentActor_(name) {
+  CURRENT_ACTOR_ = name || '';
+}
+
+/** Mengisi kolom pencatat (CreatedBy/CreatedAt/UpdatedBy/UpdatedAt) bila tabel memilikinya. */
+function stampCreated_(name, obj) {
+  const headers = SCHEMA[name];
+  if (headers.indexOf('CreatedBy') === -1) return obj;
+  const now = nowStr_();
+  if (!obj.CreatedBy) obj.CreatedBy = CURRENT_ACTOR_ || 'Sistem';
+  if (!obj.CreatedAt) obj.CreatedAt = now;
+  if (headers.indexOf('UpdatedAt') !== -1 && !obj.UpdatedAt) obj.UpdatedAt = obj.CreatedAt;
+  return obj;
+}
+
+/** Info pencatat untuk ditampilkan sebagai catatan kecil di bawah setiap data. */
+function auditInfo_(row) {
+  row = row || {};
+  return { createdBy: row.CreatedBy || '', createdAt: row.CreatedAt || '', updatedBy: row.UpdatedBy || '', updatedAt: row.UpdatedAt || '' };
+}
+
+function stampUpdated_(name, patch) {
+  const headers = SCHEMA[name];
+  if (headers.indexOf('UpdatedBy') === -1) return patch;
+  return Object.assign({}, patch, { UpdatedBy: CURRENT_ACTOR_ || 'Sistem', UpdatedAt: nowStr_() });
+}
 
 function clearTableCache_() {
   TABLE_CACHE_ = {};
@@ -86,7 +125,10 @@ function setupDatabase() {
   seedCreditCards_();
   seedCategories_();
   if (getSetting_('SAMPLE_LOADED', '') !== 'TRUE') {
+    const previousActor = CURRENT_ACTOR_;
+    setCurrentActor_('Contoh');
     insertSampleData_();
+    setCurrentActor_(previousActor);
     setSetting_('SAMPLE_LOADED', 'TRUE', 'Data contoh sudah pernah dibuat');
   }
   recalculateStoredValues_();
@@ -107,6 +149,7 @@ function migrateDatabase_() {
   });
   clearTableCache_();
   seedSettings_();
+  seedContractCategory_();
   if (getSetting_('APP_NAME', '') === 'Manajemen Rumah Tangga') setSetting_('APP_NAME', APP_NAME);
   setSetting_('DB_VERSION', DB_VERSION, 'Versi struktur database');
   recalculateStoredValues_();
@@ -139,7 +182,7 @@ function columnFormat_(header) {
   if (TEXT_COLUMNS.indexOf(header) !== -1) return '@';
   if (header === 'Month' || header === 'Year' || header === 'Tenor' || header === 'StatementDate' ||
     header === 'DueDate' || header === 'PaidMonths' || header === 'RemainingMonths' || header === 'Quantity' ||
-    header === 'Interest' || header === 'MinimumPayment') return '0.##';
+    header === 'Interest' || header === 'MinimumPayment' || header === 'PaidBefore') return '0.##';
   if (NUMBER_COLUMNS.indexOf(header) !== -1) return '#,##0';
   return null;
 }
@@ -174,7 +217,8 @@ function normalizeCell_(header, value) {
   }
   if (NUMBER_COLUMNS.indexOf(header) !== -1) {
     const num = Number(value);
-    return value === '' || !isFinite(num) ? 0 : num;
+    if (value === '' || !isFinite(num)) return 0;
+    return MONEY_COLUMNS.indexOf(header) !== -1 ? Math.round(num) : num;
   }
   if (BOOLEAN_COLUMNS.indexOf(header) !== -1) return isTrue_(value);
   return value === null || value === undefined ? '' : String(value);
@@ -216,7 +260,7 @@ function insertRows_(name, objs) {
   const range = sheet.getRange(start, 1, objs.length, width);
   const format = rowFormats_(name)[0];
   range.setNumberFormats(objs.map(function () { return format; }));
-  range.setValues(objs.map(function (o) { return rowValues_(name, o); }));
+  range.setValues(objs.map(function (o) { return rowValues_(name, stampCreated_(name, o)); }));
   delete TABLE_CACHE_[name];
 }
 
@@ -227,7 +271,7 @@ function findRow_(name, id) {
 function updateRow_(name, id, patch) {
   const existing = findRow_(name, id);
   if (!existing) throw appError_('Data dengan ID ' + id + ' tidak ditemukan.', 'NOT_FOUND');
-  const merged = Object.assign({}, existing, patch);
+  const merged = Object.assign({}, existing, stampUpdated_(name, patch));
   const sheet = getSheet_(name);
   const range = sheet.getRange(existing._row, 1, 1, SCHEMA[name].length);
   range.setNumberFormats(rowFormats_(name));
@@ -328,6 +372,7 @@ function seedSettings_() {
     ['ALLOW_CASH_TRANSFER', 'FALSE', 'Izinkan transfer dari kas tunai (setor tunai / antar dompet)'],
     ['SHOPPING_BUDGET_CATEGORY', 'Belanja Bahan Makanan', 'Kategori anggaran yang dipakai sebagai budget menu Belanja'],
     ['INSTALLMENT_BILLING_DAY', '16', 'Tanggal cicilan kartu kredit ditagihkan setiap bulan (berlaku untuk cicilan baru)'],
+    ['BACKUP_FOLDER_URL', '', 'Link folder Google Drive tujuan tombol Backup ke Google Drive'],
     ['LAST_BACKUP', '', 'Tanggal backup terakhir'],
     ['LAST_BACKUP_BY', '', 'Pengguna yang terakhir melakukan backup'],
     ['SAMPLE_IDS', '[]', 'Daftar ID data contoh (dipakai fitur Hapus Data Contoh)']
@@ -368,9 +413,9 @@ function seedCreditCards_() {
   if (readTable_('CreditCards').length) return;
   insertRows_('CreditCards', [
     { ID: 'CC-001', CardName: 'Mandiri Visa', Bank: 'Bank Mandiri', Limit: 20000000, Outstanding: 0, AvailableLimit: 20000000,
-      StatementDate: 17, DueDate: 5, MinimumPayment: 10, Active: true },
+      StatementDate: 17, DueDate: 5, MinimumPayment: 10, Active: true, CardNumber: '4321' },
     { ID: 'CC-002', CardName: 'Tokopedia Card', Bank: 'Bank Mandiri', Limit: 10000000, Outstanding: 0, AvailableLimit: 10000000,
-      StatementDate: 25, DueDate: 12, MinimumPayment: 10, Active: true }
+      StatementDate: 25, DueDate: 12, MinimumPayment: 10, Active: true, CardNumber: '8765' }
   ]);
 }
 
@@ -382,8 +427,12 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   ['Jajan', 'Makan di Luar,Snack,Kopi', '#f59e0b'],
   ['Tagihan', 'Listrik,Air,Internet,Pulsa,Asuransi', '#dc2626'],
   ['Kesehatan', 'Obat,Dokter,Vitamin', '#db2777'],
-  ['Lainnya', 'Hadiah,Donasi,Lain-lain', '#64748b']
+  ['Lainnya', 'Hadiah,Donasi,Lain-lain', '#64748b'],
+  ['Kredit & Cicilan', 'Kendaraan,Elektronik,KPR,Pinjaman,Lain-lain', '#ea580c']
 ];
+
+/** Kategori bawaan untuk pembayaran Kredit Kontrak (leasing motor, KPR, kredit HP, dll). */
+const CONTRACT_CATEGORY = 'Kredit & Cicilan';
 
 const DEFAULT_INCOME_CATEGORIES = [
   ['Gaji', 'Gaji Bapak,Gaji Ibu', '#059669'],
@@ -401,6 +450,15 @@ function seedCategories_() {
     rows.push({ ID: 'CAT-' + ('00' + (i + 101)).slice(-3), Name: c[0], Type: 'Pemasukan', SubCategories: c[1], Color: c[2], Active: true });
   });
   insertRows_('Categories', rows);
+}
+
+/** Database versi lama: tambahkan kategori Kredit & Cicilan bila belum ada. */
+function seedContractCategory_() {
+  const categories = readTable_('Categories');
+  if (categories.some(function (c) { return c.Name.toLowerCase() === CONTRACT_CATEGORY.toLowerCase(); })) return;
+  const def = DEFAULT_EXPENSE_CATEGORIES.filter(function (c) { return c[0] === CONTRACT_CATEGORY; })[0];
+  const id = categories.some(function (c) { return c.ID === 'CAT-009'; }) ? nextSimpleId_('Categories', 'CAT', 3) : 'CAT-009';
+  insertRow_('Categories', { ID: id, Name: def[0], Type: 'Pengeluaran', SubCategories: def[1], Color: def[2], Active: true });
 }
 
 /* =========================== DATA CONTOH =========================== */
@@ -446,8 +504,16 @@ function insertSampleData_() {
     trx(d(cur, 8), 'Pembayaran Kartu Kredit', 'ACC-001', 'CC-001', 'Kartu Kredit', '', 350000, 'Bayar tagihan Mandiri Visa', 'Transfer'),
     trx(d(cur, 10), 'Pengeluaran', 'ACC-001', '', 'Pendidikan', 'SPP', 750000, 'SPP sekolah anak', 'Transfer'),
     trx(d(cur, 12), 'Pengeluaran', 'ACC-006', '', 'Jajan', 'Snack', 85000, 'Jajan anak', 'Tunai'),
-    trx(d(cur, 13), 'Pengeluaran', 'ACC-004', '', 'Tagihan', 'Internet', 350000, 'Internet rumah', 'Transfer')
+    trx(d(cur, 13), 'Pengeluaran', 'ACC-004', '', 'Tagihan', 'Internet', 350000, 'Internet rumah', 'Transfer'),
+    trx(d(cur, 4), 'Pengeluaran', 'ACC-001', '', CONTRACT_CATEGORY, 'Kendaraan', 1050000, 'Cicilan ke-10 Honda Beat (CONTOH-ADR-0001)', 'Autodebet'),
+    trx(d(prev, 20), 'Pengeluaran', 'ACC-002', '', CONTRACT_CATEGORY, 'Elektronik', 650000, 'Cicilan ke-3 HP Samsung A55 (CONTOH-HC-0002)', 'Transfer')
   ];
+  // Kredit kontrak contoh: motor (cicilan ke-10 sudah dibayar bulan ini) dan HP (cicilan ke-4 jatuh tempo beberapa hari lagi).
+  const phoneDueDay = Math.min(today.d + 3, daysInMonth_(cur.y, cur.m));
+  const contractMotor = { id: 'KTR-001', due: addMonthsStr_(dateStr_(cur.y, cur.m, 5), -9) };
+  const contractPhone = { id: 'KTR-002', due: addMonthsStr_(dateStr_(cur.y, cur.m, phoneDueDay), -3) };
+  transactions[15].ContractID = contractMotor.id;
+  transactions[16].ContractID = contractPhone.id;
   insertRows_('Transactions', transactions);
 
   const inst = buildInstallment_({
@@ -456,6 +522,16 @@ function insertSampleData_() {
   });
   insertRow_('Installments', inst);
   ids.push(inst.ID);
+
+  insertRows_('Contracts', [
+    { ID: contractMotor.id, ContractNo: 'CONTOH-ADR-0001', Lender: 'Adira Finance', Item: 'Honda Beat 2025', Tenor: 24,
+      MonthlyPayment: 1050000, FirstDueDate: contractMotor.due, PaidBefore: 9, PaymentAccount: 'ACC-001', Category: CONTRACT_CATEGORY,
+      Notes: 'Data contoh — DP Rp3.000.000', CreatedAt: now, UpdatedAt: now },
+    { ID: contractPhone.id, ContractNo: 'CONTOH-HC-0002', Lender: 'Home Credit', Item: 'HP Samsung A55', Tenor: 12,
+      MonthlyPayment: 650000, FirstDueDate: contractPhone.due, PaidBefore: 2, PaymentAccount: 'ACC-002', Category: CONTRACT_CATEGORY,
+      Notes: 'Data contoh', CreatedAt: now, UpdatedAt: now }
+  ]);
+  ids.push(contractMotor.id, contractPhone.id);
 
   const budgetAmounts = { 'Rumah': 1500000, 'Transportasi': 800000, 'Pendidikan': 1000000, 'Belanja Bahan Makanan': 3000000,
     'Jajan': 500000, 'Tagihan': 1200000, 'Kesehatan': 500000, 'Lainnya': 500000 };
@@ -525,14 +601,14 @@ function insertSampleData_() {
   setSetting_('SAMPLE_IDS', JSON.stringify(ids));
 }
 
-/** Menghapus semua data contoh (transaksi, anggaran, belanja, agenda, dokumen, cicilan). */
+/** Menghapus semua data contoh (transaksi, anggaran, belanja, agenda, dokumen, cicilan, kredit kontrak). */
 function deleteSampleData() {
   const ids = parseJsonSafe_(getSetting_('SAMPLE_IDS', '[]'), []);
   if (!ids.length) return ok_({ deleted: 0 }, 'Tidak ada data contoh yang tersisa');
   const set = {};
   ids.forEach(function (id) { set[id] = true; });
   let deleted = 0;
-  ['Transactions', 'Installments', 'Budgets', 'Shopping', 'Agenda', 'FamilyDocuments'].forEach(function (name) {
+  ['Transactions', 'Installments', 'Budgets', 'Shopping', 'Agenda', 'FamilyDocuments', 'Contracts'].forEach(function (name) {
     deleted += deleteRowsWhere_(name, function (r) { return set[r.ID]; });
   });
   setSetting_('SAMPLE_IDS', '[]');
